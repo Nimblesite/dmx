@@ -112,8 +112,16 @@ jobs:
     name: Verify
     needs: preflight
     uses: ./.github/workflows/ci.yml
+    # A called workflow may not request more than its caller grants, and GitHub
+    # checks that STATICALLY, before any job runs — an `if` that will never be
+    # true does not excuse the job from the check. ci.yml's `security` job asks
+    # for `pull-requests: write` to comment on a PR, so withholding it here does
+    # not skip that job, it refuses the whole run with `startup_failure` and no
+    # release starts at all. Granted, therefore, and unused: `security` is
+    # `if: github.event_name == 'pull_request'`, which a tag push never is.
     permissions:
       contents: read
+      pull-requests: write
     with:
       ref: ${{ inputs.ref || github.sha }}
 
