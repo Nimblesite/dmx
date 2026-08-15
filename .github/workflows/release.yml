@@ -405,18 +405,15 @@ jobs:
           set -euo pipefail
           npm ci --prefix src/editors/vscode
 
-          # Azure DevOps' fixed first-party resource is what `vsce` authenticates
-          # against. Despite the environment variable name required by `vsce`,
-          # this is a short-lived OIDC-derived access token, not a stored PAT.
-          marketplace_token="$(az account get-access-token \
-            --resource 499b84ac-1321-427f-aa17-267ca6975798 \
-            --query accessToken -o tsv)"
-          echo "::add-mask::${marketplace_token}"
-          export VSCE_PAT="${marketplace_token}"
-
+          # `--azure-credential` hands vsce the Entra session `azure/login`
+          # established from this job's OIDC token, and vsce acquires what it
+          # needs itself. Nothing mints, masks, exports or stores a token: there
+          # is no VSCE_PAT in this release, and no Marketplace PAT exists to
+          # expire, leak or rotate [release.authentication].
           for bundle in $BUNDLES; do
             echo "Publishing bundles/$bundle"
             npx --prefix src/editors/vscode vsce publish \
+              --azure-credential \
               --skip-duplicate \
               --packagePath "bundles/$bundle"
           done
