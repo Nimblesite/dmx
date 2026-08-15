@@ -11,8 +11,11 @@ name: Release
 # A tag is the release, and THE TAG IS THE VERSION. Every package file in the
 # tree carries the placeholder `0.0.0`; each job checks out the tagged commit
 # and stamps what the tag names into its own throwaway checkout before it builds
-# [release.version]. Nothing commits, nothing pushes, and no job checks out a
-# branch. The stamped tree is a pure function of (tagged commit, tag), so
+# [release.version]. Nothing pushes and no job checks out a branch; the pub.dev
+# job alone commits, into its own throwaway checkout and only because pub
+# refuses to validate an archive with uncommitted changes beside it. The
+# repository is never written to. The stamped tree is a pure function of
+# (tagged commit, tag), so
 # `make version VERSION=1.2.3` on the tagged commit reproduces what shipped —
 # nobody bumps a number before tagging, and no tag is ever refused for a file
 # somebody forgot.
@@ -50,10 +53,40 @@ jobs:
     name: Preflight
     runs-on: ubuntu-22.04
     timeout-minutes: 10
+    # The publishing credentials are scoped to this environment, and an
+    # environment's secrets are readable ONLY by a job that declares it — so the
+    # check below is meaningless anywhere else. It reported both as absent while
+    # they were set correctly, which is the one way a guard can be worse than no
+    # guard: refusing the release it was added to protect.
+    environment: release
     outputs:
       version: ${{ steps.version.outputs.version }}
       publishing: ${{ github.event_name == 'push' }}
     steps:
+      # FIRST, before a checkout even. `publish` and `publish-pub` are held to
+      # the same gates but run in PARALLEL, so a Marketplace credential that
+      # turns out to be missing at publish time is discovered with pub.dev
+      # already published — and a pub version cannot be withdrawn, only
+      # retracted. The credentials are therefore proven to EXIST here, where the
+      # whole cost of being wrong is a red tag. Presence only: a value is never
+      # printed, compared, or logged.
+      - name: The publishing credentials exist
+        if: github.event_name == 'push'
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        run: |
+          set -euo pipefail
+          missing=""
+          [ -n "${AZURE_CLIENT_ID:-}" ] || missing="${missing} AZURE_CLIENT_ID"
+          [ -n "${AZURE_TENANT_ID:-}" ] || missing="${missing} AZURE_TENANT_ID"
+          if [ -n "${missing}" ]; then
+            echo "::error::Release refused: no value for${missing}. The Marketplace publish exchanges GitHub OIDC for an Entra session and cannot run without them, and pub.dev publishes alongside it — so releasing now would burn a pub.dev version with no extension beside it [release.authentication]."
+            exit 1
+          fi
+          echo "AZURE_CLIENT_ID: present"
+          echo "AZURE_TENANT_ID: present"
+
       - uses: actions/checkout@v4
         with:
           # The tagged commit, never a branch — `github.sha` on a tag push IS
@@ -112,8 +145,16 @@ jobs:
     name: Verify
     needs: preflight
     uses: ./.github/workflows/ci.yml
+    # A called workflow may not request more than its caller grants, and GitHub
+    # checks that STATICALLY, before any job runs — an `if` that will never be
+    # true does not excuse the job from the check. ci.yml's `security` job asks
+    # for `pull-requests: write` to comment on a PR, so withholding it here does
+    # not skip that job, it refuses the whole run with `startup_failure` and no
+    # release starts at all. Granted, therefore, and unused: `security` is
+    # `if: github.event_name == 'pull_request'`, which a tag push never is.
     permissions:
       contents: read
+      pull-requests: write
     with:
       ref: ${{ inputs.ref || github.sha }}
 
@@ -186,10 +227,7 @@ jobs:
             rust: x86_64-pc-windows-gnu
             apt: gcc-mingw-w64-x86-64
             cc: x86_64-w64-mingw32-gcc
-          - vsix: darwin-x64
-            os: macos-15-intel
-            rust: x86_64-apple-darwin
-            native: true
+            linker: x86_64-w64-mingw32-gcc
           - vsix: darwin-arm64
             os: macos-14
             rust: aarch64-apple-darwin
@@ -213,14 +251,22 @@ jobs:
         if: matrix.apt != ''
         run: sudo apt-get update && sudo apt-get install --yes ${{ matrix.apt }}
 
-      - name: Point cargo and cc at it
+      # The C compiler and the LINKER are set separately because musl wants one
+      # and not the other. Rust ships its own musl libc and links that target
+      # self-contained; pointing the linker at Ubuntu's `musl-gcc` instead
+      # produced an x86_64 static-PIE that segfaulted (exit 139) the instant it
+      # was executed, so the binary was built, packaged, and dead. tree-sitter is
+      # still C and still needs CC_<triple>. Only a genuine cross-link — mingw —
+      # names a linker.
+      - name: Point cc at the cross toolchain
         if: matrix.cc != ''
+        run: echo "CC_${{ matrix.rust }}=${{ matrix.cc }}" >> "$GITHUB_ENV"
+
+      - name: Point cargo's linker at it
+        if: matrix.linker != ''
         run: |
           triple=$(echo "${{ matrix.rust }}" | tr 'a-z-' 'A-Z_')
-          {
-            echo "CC_${{ matrix.rust }}=${{ matrix.cc }}"
-            echo "CARGO_TARGET_${triple}_LINKER=${{ matrix.cc }}"
-          } >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_${triple}_LINKER=${{ matrix.linker }}" >> "$GITHUB_ENV"
 
       # VERSION stamps the bundle and reaches the compiler as DMX_VERSION, so
       # the manifest, the changelog the marketplace page shows, and the binary's
@@ -330,7 +376,7 @@ jobs:
       # The complete set, named once. A platform missing from here is a platform
       # that silently stops being published.
       BUNDLES: >-
-        dmx-darwin-arm64.vsix dmx-darwin-x64.vsix
+        dmx-darwin-arm64.vsix
         dmx-linux-arm64.vsix dmx-linux-x64.vsix
         dmx-alpine-arm64.vsix dmx-alpine-x64.vsix
         dmx-win32-x64.vsix dmx-universal.vsix
@@ -368,18 +414,15 @@ jobs:
           set -euo pipefail
           npm ci --prefix src/editors/vscode
 
-          # Azure DevOps' fixed first-party resource is what `vsce` authenticates
-          # against. Despite the environment variable name required by `vsce`,
-          # this is a short-lived OIDC-derived access token, not a stored PAT.
-          marketplace_token="$(az account get-access-token \
-            --resource 499b84ac-1321-427f-aa17-267ca6975798 \
-            --query accessToken -o tsv)"
-          echo "::add-mask::${marketplace_token}"
-          export VSCE_PAT="${marketplace_token}"
-
+          # `--azure-credential` hands vsce the Entra session `azure/login`
+          # established from this job's OIDC token, and vsce acquires what it
+          # needs itself. Nothing mints, masks, exports or stores a token: there
+          # is no VSCE_PAT in this release, and no Marketplace PAT exists to
+          # expire, leak or rotate [release.authentication].
           for bundle in $BUNDLES; do
             echo "Publishing bundles/$bundle"
             npx --prefix src/editors/vscode vsce publish \
+              --azure-credential \
               --skip-duplicate \
               --packagePath "bundles/$bundle"
           done
@@ -475,21 +518,6 @@ jobs:
         working-directory: src/dart_packages/dmx
         run: dart pub get
 
-      # The archive pub would receive, before it receives it. `--dry-run` fails
-      # on anything that would fail the real publish — a missing licence, a file
-      # the package cannot carry, an unresolvable constraint.
-      #
-      # BEFORE the stamp, deliberately. `--dry-run` exits non-zero on any
-      # warning, and one of pub's warnings is "you have uncommitted changes" —
-      # which the stamp is, by design. So the archive's SHAPE is proven here on
-      # the clean tagged checkout, where that warning cannot fire, and the
-      # version it carries is proven by the steps below. Nothing about
-      # publishability depends on which version string is in the file.
-      - name: Prove the archive is publishable
-        if: steps.published.outputs.skip != 'true'
-        working-directory: src/dart_packages/dmx
-        run: dart pub publish --dry-run
-
       # `lib/src/version.dart` is GENERATED from the pubspec by this package's
       # own macro worker, so stamping the pubspec means regenerating it — a
       # package whose `DmxPackage.version` names the previous release is a
@@ -518,12 +546,30 @@ jobs:
           make version VERSION="$VERSION"
           make dart-package-version VERSION="$VERSION" DMX="$PWD/bundle/dmx"
           git diff --stat
+          # Committed into this throwaway checkout, never pushed and never on a
+          # branch. `--dry-run` below exits non-zero on ANY warning, and "you
+          # have uncommitted changes" is one of them — so the stamp has to land
+          # in a commit for the archive to be provable at all.
+          git -c user.email=actions@github.com -c user.name="github-actions" \
+            commit -qam "stamp $VERSION"
 
-      # `--force` rather than a second `--dry-run`: the tree is deliberately
-      # dirty now, and pub treats that as a warning, not an error. Proven by
-      # `scripts/version.test.mjs` and `test/stamp_version_test.dart`, which
-      # cover what was written; proven again by the `--version` check above,
-      # which is the released binary reporting the released number.
+      # The archive pub is about to receive, exactly as it will receive it:
+      # stamped, so the version pub validates against is the version being
+      # published. `--dry-run` fails on anything that would fail the real
+      # publish — a missing licence, a file the package cannot carry, an
+      # unresolvable constraint, a changelog that never mentions this version.
+      #
+      # It ran BEFORE the stamp until v0.2.0, on the reasoning that nothing
+      # about publishability depends on the version string. It does: pub checks
+      # the changelog against the CURRENT version, so the `0.0.0` placeholder
+      # failed it every time, and the step could never once have passed.
+      - name: Prove the archive is publishable
+        if: steps.published.outputs.skip != 'true'
+        working-directory: src/dart_packages/dmx
+        run: dart pub publish --dry-run
+
+      # `--force` only to skip the interactive confirmation: the tree is clean
+      # and the archive is the one proven directly above.
       - name: Publish
         if: steps.published.outputs.skip != 'true'
         working-directory: src/dart_packages/dmx

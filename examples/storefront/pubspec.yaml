@@ -5,8 +5,7 @@ publish_to: none
 environment:
   sdk: ^3.0.0
 dependencies:
-  dmx:
-    path: ../../src/dart_packages/dmx
+  dmx: ^0.3.0
 
 dev_dependencies:
   test: ^1.25.0

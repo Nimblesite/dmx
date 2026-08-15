@@ -110,6 +110,8 @@ Version control is the team's choice. Commit generated files when a checkout sho
 ## Calls to action
 
 - **[Try dmx in your browser—no install](https://dmx.dev/playground.html)**
+- **[Install the VS Code extension](vscode:extension/Nimblesite.dmx)** — the `vscode:` link opens the extension in the editor. Pair it with the Marketplace link below rather than using either alone: the `vscode:` link does nothing for a reader who has no VS Code installed, and the Marketplace page is the only one a browser can render.
+- **[View on the Marketplace](https://marketplace.visualstudio.com/items?itemName=Nimblesite.dmx)** — the publisher is `Nimblesite`, capitalised. The lowercase `nimblesite.dmx` form is what the gallery API accepts and the web page 404s on, so it must never appear in a link.
 - **See code generation on every save**
 - **Shape your team's model template**
 - **Build a custom Dart macro**

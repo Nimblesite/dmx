@@ -6,18 +6,22 @@
   "rust-analyzer.testExplorer": true,
   "rust-analyzer.check.command": "clippy",
   "rust-analyzer.check.allTargets": true,
-
   // The Dart tests live in the example package, not at the workspace root.
   "dart.testAdditionalArgs": [],
-
   // The Dart in this repo is the example package [editor.extension.autostart].
-  "dmx.paths": ["examples/storefront/lib"],
+  "dmx.paths": [
+    "examples/storefront/lib"
+  ],
   // Off *here only*: the `dmx: watch` task above already starts a watcher on
   // folder open, and this repo is the one place both mechanisms are present.
   // Consumers get `true`, which is the whole point of the extension. To try the
   // auto-start, stop that task and run "dmx: Restart Watcher".
   "dmx.autoStart": false,
-
-  "[rust]": { "editor.formatOnSave": true },
-  "files.watcherExclude": { "**/target/**": true }
+  "[rust]": {
+    "editor.formatOnSave": true
+  },
+  "files.watcherExclude": {
+    "**/target/**": true
+  },
+  "deslop.topOffenders.groupBy": "type"
 }

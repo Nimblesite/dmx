@@ -5,6 +5,19 @@
 
 ## Unreleased
 
+- New icon: the dmx mark the website, favicon and docs already use. The
+  extension had been shipping an older mark that matched nothing else.
+
+## 0.2.0
+
+- First Marketplace release.
+- Watches every Dart package in the folder you open, not just `lib`
+  [editor.extension.paths]. Set `dmx.paths` to name them yourself.
+- Also finds the binary in `src/dmx/target/{release,debug}`
+  [editor.extension.binary].
+- Resolves reported paths against the folder dmx ran in.
+- Removed a debug probe that ran on activation.
+
 ## 0.1.0
 
 First release.

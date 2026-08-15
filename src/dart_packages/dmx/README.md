@@ -8,7 +8,7 @@ factory, and no `build_runner` run.
 This package holds the `@dmx` annotation, the types the generated code uses,
 and the API for writing your own macros in Dart. The generating itself is done
 by the dmx tool, which the
-[VS Code extension](https://marketplace.visualstudio.com/items?itemName=nimblesite.dmx)
+[VS Code extension](https://marketplace.visualstudio.com/items?itemName=Nimblesite.dmx)
 bundles and runs for you.
 
 [Run the real generator in your browser](https://dmx.dev/playground.html) ·

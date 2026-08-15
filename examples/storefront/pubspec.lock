@@ -84,10 +84,11 @@ packages:
   dmx:
     dependency: "direct main"
     description:
-      path: "../../src/dart_packages/dmx"
-      relative: true
-    source: path
-    version: "0.0.0"
+      name: dmx
+      sha256: "0d604ba0c5a9cc9977281fff53ceee03e1cad5ff99fc7ce742a086d8839b6d33"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.3.0"
   file:
     dependency: transitive
     description:

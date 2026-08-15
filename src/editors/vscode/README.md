@@ -8,7 +8,7 @@ factories, and no `build_runner` run.
 ## Install
 
 Install **dmx — Dart code generation** from the
-[VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=nimblesite.dmx),
+[VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=Nimblesite.dmx),
 or run:
 
 ```bash
