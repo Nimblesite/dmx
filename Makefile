@@ -420,6 +420,12 @@ vsix-universal: extension version ## Package the no-binary VSIX every other plat
 	@# with one would hand every unmatched platform the wrong architecture.
 	$(RM) $(EXTENSION_DIR)/bin
 	cp LICENSE $(EXTENSION_DIR)/LICENSE
+	@# `vsce` opens the --out path, it does not create the directory holding it.
+	@# `vsix` gets that directory for free from `build`; this target carries no
+	@# binary and so builds nothing, which on a fresh checkout — a release
+	@# runner, every time — means target/ does not exist and packaging dies with
+	@# ENOENT after the bundle was assembled.
+	@$(MKDIR) $(CURDIR)/$(TARGET_DIR)
 	cd $(EXTENSION_DIR) && npx vsce package --out $(CURDIR)/$(TARGET_DIR)/dmx-universal.vsix
 
 # Full clean rebuild-and-reinstall cycle for the VS Code extension
