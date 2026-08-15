@@ -5,6 +5,10 @@
 
 ## Unreleased
 
+- No API changes. `lib/` is identical to 0.1.0 apart from the version constant.
+- The tag names the version, and the release stamps it [release.version].
+- README rewritten in plainer language.
+
 ## 0.1.0
 
 First release.
