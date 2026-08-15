@@ -456,6 +456,6 @@ rebuild: ## From nothing: clean, rebuild the binary, and package the VSIX
 corpus: ## Generate every golden sample and prove it is valid Dart
 	@$(RM) $(CORPUS_DIR) && $(MKDIR) $(CORPUS_DIR)/lib
 	@cp $(GOLDEN_DIR)/*.dart $(CORPUS_DIR)/lib/
-	@printf 'name: dmx_corpus\nenvironment:\n  sdk: ^3.0.0\ndependencies:\n  dmx:\n    path: $(CURDIR)/src/dart_packages/dmx\n' > $(CORPUS_DIR)/pubspec.yaml
+	@printf 'name: dmx_corpus\nenvironment:\n  sdk: ^3.0.0\ndependencies:\n  dmx: ^0.3.0\n' > $(CORPUS_DIR)/pubspec.yaml
 	cargo run $(CRATE) --quiet -- build $(CORPUS_DIR)/lib --insert-regions
 	cd $(CORPUS_DIR) && dart pub get && dart analyze --fatal-infos
