@@ -50,6 +50,12 @@ jobs:
     name: Preflight
     runs-on: ubuntu-22.04
     timeout-minutes: 10
+    # The publishing credentials are scoped to this environment, and an
+    # environment's secrets are readable ONLY by a job that declares it — so the
+    # check below is meaningless anywhere else. It reported both as absent while
+    # they were set correctly, which is the one way a guard can be worse than no
+    # guard: refusing the release it was added to protect.
+    environment: release
     outputs:
       version: ${{ steps.version.outputs.version }}
       publishing: ${{ github.event_name == 'push' }}
