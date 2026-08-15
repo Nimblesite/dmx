@@ -5,6 +5,11 @@
 
 ## Unreleased
 
+- No API changes. The README linked the extension's Marketplace page with the
+  publisher in lowercase, which 404s; it is `Nimblesite.dmx`.
+
+## 0.2.0
+
 - No API changes. `lib/` is identical to 0.1.0 apart from the version constant.
 - The tag names the version, and the release stamps it [release.version].
 - README rewritten in plainer language.

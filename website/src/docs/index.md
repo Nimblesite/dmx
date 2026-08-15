@@ -58,17 +58,20 @@ Install **dmx — Dart code generation** in any of these ways:
 
 - In VS Code, open **Extensions** (`⇧⌘X` on macOS or `Ctrl+Shift+X` on
   Windows and Linux), search for **dmx**, and select **Install**.
-- From a terminal, run `code --install-extension nimblesite.dmx`.
-- Open the [dmx Marketplace page](https://marketplace.visualstudio.com/items?itemName=nimblesite.dmx)
+- From a terminal, run `code --install-extension Nimblesite.dmx`.
+- Select [Install the VS Code extension](vscode:extension/Nimblesite.dmx), which
+  opens the extension in the editor you already have.
+- Open the [dmx Marketplace page](https://marketplace.visualstudio.com/items?itemName=Nimblesite.dmx)
   and select **Install**.
 
 Open or reload a trusted Dart workspace after installation. The extension runs
 an initial build, inserts missing generated regions, and keeps them current as
 you save.
 
-Platform-specific extensions are published for macOS and Linux on x64 and
+Platform-specific extensions are published for macOS on ARM64, Linux on x64 and
 ARM64, Alpine on x64 and ARM64, and Windows on x64. VS Code selects the correct
-bundle automatically.
+bundle automatically, and installs a build carrying no binary anywhere else —
+that one runs `dmx` from `PATH`.
 
 For an offline or air-gapped installation, download the VSIX for your platform
 from the [latest GitHub release](https://github.com/Nimblesite/dmx/releases/latest).

@@ -17,7 +17,7 @@ Neither input leaves the tab.
 ## Install
 
 **VS Code** — install **dmx — Dart code generation** from the
-[Marketplace](https://marketplace.visualstudio.com/items?itemName=nimblesite.dmx),
+[Marketplace](https://marketplace.visualstudio.com/items?itemName=Nimblesite.dmx),
 or from a terminal:
 
 ```bash
