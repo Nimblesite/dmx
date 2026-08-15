@@ -194,10 +194,7 @@ jobs:
             rust: x86_64-pc-windows-gnu
             apt: gcc-mingw-w64-x86-64
             cc: x86_64-w64-mingw32-gcc
-          - vsix: darwin-x64
-            os: macos-15-intel
-            rust: x86_64-apple-darwin
-            native: true
+            linker: x86_64-w64-mingw32-gcc
           - vsix: darwin-arm64
             os: macos-14
             rust: aarch64-apple-darwin
@@ -221,14 +218,22 @@ jobs:
         if: matrix.apt != ''
         run: sudo apt-get update && sudo apt-get install --yes ${{ matrix.apt }}
 
-      - name: Point cargo and cc at it
+      # The C compiler and the LINKER are set separately because musl wants one
+      # and not the other. Rust ships its own musl libc and links that target
+      # self-contained; pointing the linker at Ubuntu's `musl-gcc` instead
+      # produced an x86_64 static-PIE that segfaulted (exit 139) the instant it
+      # was executed, so the binary was built, packaged, and dead. tree-sitter is
+      # still C and still needs CC_<triple>. Only a genuine cross-link — mingw —
+      # names a linker.
+      - name: Point cc at the cross toolchain
         if: matrix.cc != ''
+        run: echo "CC_${{ matrix.rust }}=${{ matrix.cc }}" >> "$GITHUB_ENV"
+
+      - name: Point cargo's linker at it
+        if: matrix.linker != ''
         run: |
           triple=$(echo "${{ matrix.rust }}" | tr 'a-z-' 'A-Z_')
-          {
-            echo "CC_${{ matrix.rust }}=${{ matrix.cc }}"
-            echo "CARGO_TARGET_${triple}_LINKER=${{ matrix.cc }}"
-          } >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_${triple}_LINKER=${{ matrix.linker }}" >> "$GITHUB_ENV"
 
       # VERSION stamps the bundle and reaches the compiler as DMX_VERSION, so
       # the manifest, the changelog the marketplace page shows, and the binary's
@@ -338,7 +343,7 @@ jobs:
       # The complete set, named once. A platform missing from here is a platform
       # that silently stops being published.
       BUNDLES: >-
-        dmx-darwin-arm64.vsix dmx-darwin-x64.vsix
+        dmx-darwin-arm64.vsix
         dmx-linux-arm64.vsix dmx-linux-x64.vsix
         dmx-alpine-arm64.vsix dmx-alpine-x64.vsix
         dmx-win32-x64.vsix dmx-universal.vsix
