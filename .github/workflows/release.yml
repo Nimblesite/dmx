@@ -11,8 +11,11 @@ name: Release
 # A tag is the release, and THE TAG IS THE VERSION. Every package file in the
 # tree carries the placeholder `0.0.0`; each job checks out the tagged commit
 # and stamps what the tag names into its own throwaway checkout before it builds
-# [release.version]. Nothing commits, nothing pushes, and no job checks out a
-# branch. The stamped tree is a pure function of (tagged commit, tag), so
+# [release.version]. Nothing pushes and no job checks out a branch; the pub.dev
+# job alone commits, into its own throwaway checkout and only because pub
+# refuses to validate an archive with uncommitted changes beside it. The
+# repository is never written to. The stamped tree is a pure function of
+# (tagged commit, tag), so
 # `make version VERSION=1.2.3` on the tagged commit reproduces what shipped —
 # nobody bumps a number before tagging, and no tag is ever refused for a file
 # somebody forgot.
@@ -515,21 +518,6 @@ jobs:
         working-directory: src/dart_packages/dmx
         run: dart pub get
 
-      # The archive pub would receive, before it receives it. `--dry-run` fails
-      # on anything that would fail the real publish — a missing licence, a file
-      # the package cannot carry, an unresolvable constraint.
-      #
-      # BEFORE the stamp, deliberately. `--dry-run` exits non-zero on any
-      # warning, and one of pub's warnings is "you have uncommitted changes" —
-      # which the stamp is, by design. So the archive's SHAPE is proven here on
-      # the clean tagged checkout, where that warning cannot fire, and the
-      # version it carries is proven by the steps below. Nothing about
-      # publishability depends on which version string is in the file.
-      - name: Prove the archive is publishable
-        if: steps.published.outputs.skip != 'true'
-        working-directory: src/dart_packages/dmx
-        run: dart pub publish --dry-run
-
       # `lib/src/version.dart` is GENERATED from the pubspec by this package's
       # own macro worker, so stamping the pubspec means regenerating it — a
       # package whose `DmxPackage.version` names the previous release is a
@@ -558,12 +546,30 @@ jobs:
           make version VERSION="$VERSION"
           make dart-package-version VERSION="$VERSION" DMX="$PWD/bundle/dmx"
           git diff --stat
+          # Committed into this throwaway checkout, never pushed and never on a
+          # branch. `--dry-run` below exits non-zero on ANY warning, and "you
+          # have uncommitted changes" is one of them — so the stamp has to land
+          # in a commit for the archive to be provable at all.
+          git -c user.email=actions@github.com -c user.name="github-actions" \
+            commit -qam "stamp $VERSION"
 
-      # `--force` rather than a second `--dry-run`: the tree is deliberately
-      # dirty now, and pub treats that as a warning, not an error. Proven by
-      # `scripts/version.test.mjs` and `test/stamp_version_test.dart`, which
-      # cover what was written; proven again by the `--version` check above,
-      # which is the released binary reporting the released number.
+      # The archive pub is about to receive, exactly as it will receive it:
+      # stamped, so the version pub validates against is the version being
+      # published. `--dry-run` fails on anything that would fail the real
+      # publish — a missing licence, a file the package cannot carry, an
+      # unresolvable constraint, a changelog that never mentions this version.
+      #
+      # It ran BEFORE the stamp until v0.2.0, on the reasoning that nothing
+      # about publishability depends on the version string. It does: pub checks
+      # the changelog against the CURRENT version, so the `0.0.0` placeholder
+      # failed it every time, and the step could never once have passed.
+      - name: Prove the archive is publishable
+        if: steps.published.outputs.skip != 'true'
+        working-directory: src/dart_packages/dmx
+        run: dart pub publish --dry-run
+
+      # `--force` only to skip the interactive confirmation: the tree is clean
+      # and the archive is the one proven directly above.
       - name: Publish
         if: steps.published.outputs.skip != 'true'
         working-directory: src/dart_packages/dmx
