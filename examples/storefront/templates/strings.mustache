@@ -1,0 +1,20 @@
+  static const String locale = {{{locale}}};
+
+{{#messages}}
+{{#description}}
+  /// {{{description}}}
+{{/description}}
+  @override
+  String {{name}}({{{signature}}}) =>
+{{#isPlural}}
+      switch ({{countParam}}) {
+{{#categories}}
+        {{{match}}} => {{{text}}},
+{{/categories}}
+      };
+{{/isPlural}}
+{{^isPlural}}
+      {{{text}}};
+{{/isPlural}}
+
+{{/messages}}

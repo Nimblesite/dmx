@@ -1,0 +1,18 @@
+  /// Every field that differs, in field order. Collection fields compare by
+  /// content, so this agrees with `==` rather than with identity.
+  ///
+  /// Nothing here is reflective: the field list is fixed at generation time,
+  /// so adding a field adds a line on the next build and cannot be forgotten.
+  List<DmxChange> diff({{className}} {{otherParam}}) => <DmxChange>[
+{{#fields}}
+        if ({{{differs}}})
+          DmxChange({{{key}}}, {{name}}, {{otherParam}}.{{name}}),
+{{/fields}}
+      ];
+
+  /// The names alone, for a "3 unsaved changes" badge that does not need the
+  /// values behind them.
+  List<String> changedFields({{className}} {{otherParam}}) =>
+      <String>[for (final change in diff({{otherParam}})) change.field];
+
+  bool differsFrom({{className}} {{otherParam}}) => diff({{otherParam}}).isNotEmpty;

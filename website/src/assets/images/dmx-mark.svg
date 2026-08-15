@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">dmx</title>
+  <desc id="description">A shaded blue faceted gem with an orange splice, inspired by Dart.</desc>
+  <defs>
+    <linearGradient id="topFacet" x1="166" y1="34" x2="322" y2="123" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#71E4FA"/>
+      <stop offset="0.5" stop-color="#35BDF2"/>
+      <stop offset="1" stop-color="#149DE1"/>
+    </linearGradient>
+    <linearGradient id="leftFacet" x1="94" y1="155" x2="318" y2="430" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1687FF"/>
+      <stop offset="0.54" stop-color="#0870EF"/>
+      <stop offset="1" stop-color="#0450BA"/>
+    </linearGradient>
+    <linearGradient id="rightFacet" x1="218" y1="126" x2="441" y2="347" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0869CB"/>
+      <stop offset="0.55" stop-color="#0752A5"/>
+      <stop offset="1" stop-color="#06346F"/>
+    </linearGradient>
+    <linearGradient id="bottomFacet" x1="305" y1="359" x2="415" y2="446" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#56DBFA"/>
+      <stop offset="0.55" stop-color="#25B8F0"/>
+      <stop offset="1" stop-color="#1498DD"/>
+    </linearGradient>
+    <linearGradient id="splice" x1="132" y1="106" x2="351" y2="359" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFB64E"/>
+      <stop offset="0.58" stop-color="#FF9429"/>
+      <stop offset="1" stop-color="#FF7900"/>
+    </linearGradient>
+  </defs>
+
+  <g>
+    <path fill="url(#leftFacet)" stroke="#076BDB" stroke-width="3" stroke-linejoin="round" d="M126 103 251 248l29 8 65 100-81 90h-42c-8 0-15-3-20-9L55 270c-7-8-8-19-3-29l74-138Z"/>
+    <path fill="url(#rightFacet)" stroke="#07509B" stroke-width="3" stroke-linejoin="round" d="M126 103h223l111 106v147H345l-65-100-29-8-125-145Z"/>
+
+    <path d="m132 108 120 140 29 9 67 98" fill="none" stroke="#001C49" stroke-opacity="0.58" stroke-width="16" stroke-linejoin="miter"/>
+    <path d="m132 108 120 140 29 9 67 98" fill="none" stroke="url(#splice)" stroke-width="8" stroke-linejoin="miter"/>
+
+    <path fill="url(#topFacet)" stroke="#24B8EA" stroke-width="3" stroke-linejoin="round" d="m126 103 103-86c10-9 24-9 35 0l85 86H126Z"/>
+    <path d="M134 98 231 19c9-7 21-7 30 0" fill="none" stroke="#B2F3FF" stroke-opacity="0.48" stroke-width="2" stroke-linecap="round"/>
+    <path d="M126 104h223" fill="none" stroke="#001D48" stroke-opacity="0.62" stroke-width="6"/>
+
+    <path fill="url(#bottomFacet)" stroke="#149DDF" stroke-width="3" stroke-linejoin="round" d="M345 356h115l-87 90H264l81-90Z"/>
+    <path d="m269 441 78-81h108" fill="none" stroke="#99ECFF" stroke-opacity="0.5" stroke-width="2" stroke-linecap="round"/>
+  </g>
+</svg>

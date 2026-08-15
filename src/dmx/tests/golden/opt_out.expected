@@ -1,0 +1,39 @@
+  //#region
+  static Result<JsonOnly, DecodeError> fromJson(Object? json, [String path = 'JsonOnly']) =>
+      switch (json) {
+        {
+          'id': final String id,
+        } =>
+          Ok(JsonOnly(
+            id: id,
+          )),
+        _ => Err(DecodeError(path, 'JsonOnly', json)),
+      };
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'id': id,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is JsonOnly &&
+          other.id == id);
+
+  @override
+  int get hashCode => Object.hash(
+        runtimeType,
+        id,
+      );
+  //#endregion
+  //#region
+  @override
+  String toString() => 'NoJson(id: $id)';
+
+  NoJson copyWith({
+    String? id,
+  }) =>
+      NoJson(
+        id: id ?? this.id,
+      );
+  //#endregion

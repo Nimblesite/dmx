@@ -1,0 +1,52 @@
+  //#region
+  static Result<Plain, DecodeError> fromJson(Object? json, [String path = 'Plain']) =>
+      switch (json) {
+        {
+          'id': final String id,
+          'count': final int count,
+          'active': final bool active,
+        } =>
+          Ok(Plain(
+            id: id,
+            count: count,
+            active: active,
+          )),
+        _ => Err(DecodeError(path, 'Plain', json)),
+      };
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'id': id,
+        'count': count,
+        'active': active,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Plain &&
+          other.id == id &&
+          other.count == count &&
+          other.active == active);
+
+  @override
+  int get hashCode => Object.hash(
+        runtimeType,
+        id,
+        count,
+        active,
+      );
+
+  @override
+  String toString() => 'Plain(id: $id, count: $count, active: $active)';
+
+  Plain copyWith({
+    String? id,
+    int? count,
+    bool? active,
+  }) =>
+      Plain(
+        id: id ?? this.id,
+        count: count ?? this.count,
+        active: active ?? this.active,
+      );
+  //#endregion

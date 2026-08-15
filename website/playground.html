@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#080b10" />
+    <meta name="color-scheme" content="dark" />
+    <meta
+      name="description"
+      content="Edit Dart and its real Mustache template, then run the dmx Rust pipeline compiled to WebAssembly — entirely in your browser."
+    />
+    <meta name="robots" content="index, follow" />
+    <link rel="icon" href="/src/assets/images/dmx-mark.svg" type="image/svg+xml" />
+    <link rel="icon" href="/src/assets/images/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="/src/assets/images/apple-touch-icon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="dmx" />
+    <meta property="og:title" content="dmx playground — the real generator in your browser" />
+    <meta
+      property="og:description"
+      content="Shape the Dart input and the Mustache output, then run the real Rust generator locally. Nothing leaves the tab."
+    />
+    <meta
+      property="og:image"
+      content="https://raw.githubusercontent.com/Nimblesite/dmx/main/website/src/assets/images/dmx-mark.png"
+    />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="1200" />
+    <meta property="og:image:alt" content="A shaded blue faceted dmx mark with an orange splice" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="dmx playground — the real generator in your browser" />
+    <meta
+      name="twitter:description"
+      content="Shape the Dart input and the Mustache output, then run the real Rust generator locally."
+    />
+    <meta
+      name="twitter:image"
+      content="https://raw.githubusercontent.com/Nimblesite/dmx/main/website/src/assets/images/dmx-mark.png"
+    />
+    <meta name="twitter:image:alt" content="A shaded blue faceted dmx mark with an orange splice" />
+    <title>dmx playground — the real generator in your browser</title>
+  </head>
+  <body class="playground-page">
+    <a class="skip-link" href="#main-content">Skip to content</a>
+
+    <!-- shared-navigation -->
+
+    <main id="main-content" class="playground-main" data-playground data-mode="inline">
+      <div class="playground-shell">
+        <div class="playground-toolbar">
+          <div class="macro-picker">
+            <label for="macro-select">Example</label>
+            <div class="select-wrap">
+              <select id="macro-select" data-macro-select aria-describedby="sample-description"></select>
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m5 6 3 3 3-3" /></svg>
+            </div>
+            <p id="sample-description" data-sample-description></p>
+          </div>
+          <div class="toolbar-actions">
+            <label class="mode-toggle">
+              <input type="checkbox" data-inline-toggle checked />
+              <span>Inline watch mode</span>
+            </label>
+            <button class="tool-button" type="button" aria-label="Reset" data-reset>
+              <svg viewBox="0 0 18 18" aria-hidden="true"><path d="M14 6V2m0 0h-4m4 0-2.2 2.2a6 6 0 1 0 1.1 8.5" /></svg>
+              <span class="tool-button-label">Reset</span>
+            </button>
+            <button class="tool-button" type="button" aria-label="Copy output" data-copy disabled>
+              <svg viewBox="0 0 18 18" aria-hidden="true"><rect x="6" y="6" width="8" height="8" rx="1.5" /><path d="M12 6V4.5A1.5 1.5 0 0 0 10.5 3h-6A1.5 1.5 0 0 0 3 4.5v6A1.5 1.5 0 0 0 4.5 12H6" /></svg>
+              <span class="tool-button-label">Copy output</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="editor-grid">
+          <section class="editor-pane input-pane" aria-label="Generator inputs">
+            <header class="input-pane-header">
+              <div class="editor-tabs" role="tablist" aria-label="Choose an input to edit">
+                <button
+                  id="dart-tab"
+                  class="editor-tab"
+                  type="button"
+                  role="tab"
+                  aria-selected="true"
+                  aria-controls="dart-panel"
+                  data-editor-tab="dart"
+                >
+                  <span class="pane-dot cyan"></span>
+                  Dart source
+                </button>
+                <button
+                  id="template-tab"
+                  class="editor-tab"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="template-panel"
+                  tabindex="-1"
+                  data-editor-tab="template"
+                >
+                  <span class="pane-dot orange"></span>
+                  Mustache template
+                </button>
+              </div>
+              <span data-input-metrics>0 lines · 0 chars</span>
+            </header>
+            <div class="input-workspace">
+              <div
+                id="dart-panel"
+                class="editor-panel"
+                role="tabpanel"
+                aria-labelledby="dart-tab"
+                data-editor-panel="dart"
+                data-highlight-language="dart"
+              >
+                <label class="sr-only" for="source-input">Dart source to generate</label>
+                <pre class="editor-highlight" aria-hidden="true"><code data-source-highlight></code></pre>
+                <textarea
+                  id="source-input"
+                  data-source-input
+                  aria-describedby="input-hint"
+                  maxlength="50000"
+                  autocomplete="off"
+                  autocapitalize="off"
+                  spellcheck="false"
+                ></textarea>
+              </div>
+              <div
+                id="template-panel"
+                class="editor-panel template-panel"
+                role="tabpanel"
+                aria-labelledby="template-tab"
+                data-editor-panel="template"
+                data-highlight-language="mustache"
+                hidden
+              >
+                <label class="sr-only" for="template-input">Mustache output template</label>
+                <pre class="editor-highlight" aria-hidden="true"><code data-template-highlight></code></pre>
+                <textarea
+                  id="template-input"
+                  data-template-input
+                  aria-describedby="input-hint"
+                  maxlength="50000"
+                  autocomplete="off"
+                  autocapitalize="off"
+                  spellcheck="false"
+                ></textarea>
+              </div>
+            </div>
+            <p id="input-hint" class="pane-hint" data-input-hint>
+              Edit Dart freely · the output regenerates live
+            </p>
+          </section>
+
+          <div class="transform-rail" aria-hidden="true">
+            <span></span>
+            <svg viewBox="0 0 24 24"><path d="m8 5 7 7-7 7" /></svg>
+            <span></span>
+          </div>
+
+          <section
+            class="editor-pane output-pane"
+            aria-labelledby="output-title"
+            data-highlight-language="dart"
+          >
+            <header>
+              <div><span class="pane-dot lime"></span><h3 id="output-title">Generated Dart</h3></div>
+              <span data-output-metrics>0 lines · 0 chars</span>
+            </header>
+            <pre tabindex="0"><code data-source-output>The Rust compiler is loading…</code></pre>
+            <p class="pane-hint">Generated in place · nothing hidden at runtime</p>
+          </section>
+        </div>
+
+        <div class="playground-status" data-status data-state="loading" role="status" aria-live="polite">
+          <span class="status-light" aria-hidden="true"></span>
+          <span data-status-text>Loading the Rust compiler…</span>
+          <span class="wasm-badge">Rust → WASM</span>
+        </div>
+      </div>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

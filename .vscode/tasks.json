@@ -1,0 +1,48 @@
+{
+  // Starts `dmx watch` automatically when this folder is opened, so editing a
+  // Dart source regenerates its //#region block without any manual step
+  // [execution.modes]. VS Code gates folderOpen tasks behind a one-time
+  // per-workspace consent: run "Tasks: Manage Automatic Tasks" from the command
+  // palette and choose "Allow Automatic Tasks", then reload the window.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "dmx: watch",
+      "detail": "Regenerate //#region blocks whenever a Dart source is saved",
+      "type": "shell",
+      "command": "make dev",
+      "options": { "cwd": "${workspaceFolder}" },
+      "isBackground": true,
+      "runOptions": { "runOn": "folderOpen" },
+      "presentation": {
+        // Visible but unfocused: a watcher you cannot see is a watcher you
+        // assume is running.
+        "reveal": "always",
+        "focus": false,
+        "panel": "dedicated",
+        "clear": true
+      },
+      // The watcher runs forever and has no per-cycle begin marker, so there is
+      // no honest background pattern to match. Errors appear in the terminal.
+      "problemMatcher": []
+    },
+    {
+      "label": "dmx: build",
+      "detail": "One-shot regeneration, inserting regions for newly annotated classes",
+      "type": "shell",
+      "command": "make example",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "dmx: verify",
+      "detail": "Tests, golden corpus, example, clippy",
+      "type": "shell",
+      "command": "make ci",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "test",
+      "problemMatcher": []
+    }
+  ]
+}

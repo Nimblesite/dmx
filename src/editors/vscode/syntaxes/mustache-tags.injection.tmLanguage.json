@@ -1,0 +1,153 @@
+{
+  "name": "Mustache tags",
+  "scopeName": "mustache.tags.injection",
+  "injectionSelector": "L:source.mustache",
+  "comment": "`L:` puts these rules ahead of the host grammar's, so `{{name}}` is a tag even where Dart would otherwise be reading a string literal — which is exactly where dmx templates put them: '{{className}}.{{name}}'.",
+  "patterns": [
+    {
+      "include": "#block-comment"
+    },
+    {
+      "include": "#comment"
+    },
+    {
+      "include": "#delimiter"
+    },
+    {
+      "include": "#unescaped-triple"
+    },
+    {
+      "include": "#section"
+    },
+    {
+      "include": "#partial"
+    },
+    {
+      "include": "#unescaped-ampersand"
+    },
+    {
+      "include": "#interpolation"
+    }
+  ],
+  "repository": {
+    "block-comment": {
+      "name": "comment.block.mustache",
+      "begin": "\\{\\{!--",
+      "end": "--\\}\\}",
+      "captures": {
+        "0": {
+          "name": "punctuation.definition.comment.mustache"
+        }
+      }
+    },
+    "comment": {
+      "name": "comment.block.mustache",
+      "begin": "\\{\\{!",
+      "end": "\\}\\}",
+      "captures": {
+        "0": {
+          "name": "punctuation.definition.comment.mustache"
+        }
+      }
+    },
+    "delimiter": {
+      "name": "meta.tag.delimiter.mustache",
+      "match": "(\\{\\{=)([^=]*)(=\\}\\})",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.tag.begin.mustache"
+        },
+        "2": {
+          "name": "keyword.control.delimiter.mustache"
+        },
+        "3": {
+          "name": "punctuation.definition.tag.end.mustache"
+        }
+      }
+    },
+    "unescaped-triple": {
+      "name": "meta.tag.unescaped.mustache",
+      "match": "(\\{\\{\\{)\\s*([^}]*?)\\s*(\\}\\}\\})",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.tag.begin.mustache"
+        },
+        "2": {
+          "name": "variable.other.unescaped.mustache"
+        },
+        "3": {
+          "name": "punctuation.definition.tag.end.mustache"
+        }
+      }
+    },
+    "section": {
+      "name": "meta.tag.section.mustache",
+      "match": "(\\{\\{)([#^/])\\s*([^}\\s]*)\\s*(\\}\\})",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.tag.begin.mustache"
+        },
+        "2": {
+          "name": "keyword.control.section.mustache"
+        },
+        "3": {
+          "name": "entity.name.tag.mustache"
+        },
+        "4": {
+          "name": "punctuation.definition.tag.end.mustache"
+        }
+      }
+    },
+    "partial": {
+      "name": "meta.tag.partial.mustache",
+      "match": "(\\{\\{)(>)\\s*([^}\\s]*)\\s*(\\}\\})",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.tag.begin.mustache"
+        },
+        "2": {
+          "name": "keyword.control.partial.mustache"
+        },
+        "3": {
+          "name": "entity.name.tag.mustache"
+        },
+        "4": {
+          "name": "punctuation.definition.tag.end.mustache"
+        }
+      }
+    },
+    "unescaped-ampersand": {
+      "name": "meta.tag.unescaped.mustache",
+      "match": "(\\{\\{)(&)\\s*([^}]*?)\\s*(\\}\\})",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.tag.begin.mustache"
+        },
+        "2": {
+          "name": "keyword.control.unescaped.mustache"
+        },
+        "3": {
+          "name": "variable.other.unescaped.mustache"
+        },
+        "4": {
+          "name": "punctuation.definition.tag.end.mustache"
+        }
+      }
+    },
+    "interpolation": {
+      "name": "meta.tag.interpolation.mustache",
+      "match": "(\\{\\{)\\s*([^#^/>&!={}][^}]*?)?\\s*(\\}\\})",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.tag.begin.mustache"
+        },
+        "2": {
+          "name": "variable.other.mustache"
+        },
+        "3": {
+          "name": "punctuation.definition.tag.end.mustache"
+        }
+      }
+    }
+  }
+}

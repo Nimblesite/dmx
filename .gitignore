@@ -1,0 +1,105 @@
+# agent-pmo:a72c926
+# =============================================================================
+# OS AND EDITOR NOISE
+# =============================================================================
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+
+# IDE and AI agent config dirs MUST be committed — they carry the VS Code
+# settings, launch configs, skills and instructions the team shares. DO NOT add
+# .vscode/, .idea/, .claude/, .agents/, .cursor/, .windsurf/, .clinerules or
+# .github/copilot-instructions.md.
+
+# =============================================================================
+# PORTFOLIO TOOLING
+# =============================================================================
+.too_many_cooks/
+.commandtree/
+.playwright-mcp/
+coordination/
+logs/
+nohup.out
+
+# Deslop writes its report beside the code it scanned ([CI-DESLOP]). The BUDGET
+# is committed, in .deslop.toml; the report is a build artifact regenerated on
+# every run, and a stale one checked in is a duplication figure somebody trusts.
+.deslop/
+deslop-report.*
+deslop-*.log
+
+# =============================================================================
+# SECRETS AND LOCAL OVERRIDES
+# =============================================================================
+.env
+.env.local
+.env.*.local
+*.local
+*.secret
+*.pem
+*.key
+!*.pub.key
+
+# =============================================================================
+# BUILD OUTPUT
+# =============================================================================
+# Unanchored: the crate lives at src/dmx, and a cross build lands under
+# src/dmx/target/<triple>/ [repo.layout].
+target/
+node_modules/
+tmp/
+temp/
+scratch/
+
+# Coverage. The THRESHOLD is committed, in coverage-thresholds.json
+# [COVERAGE-THRESHOLDS-JSON]; these are the artifacts it is measured from.
+# `lcov.info` has no leading slash on purpose: every component writes one next
+# to itself, and all four are artifacts.
+coverage/
+.coverage/
+lcov.info
+*.profraw
+*.profdata
+
+
+# Cargo.lock is COMMITTED: dmx ships as a binary, so the lock file is the
+# reproducible build input. It lives with the crate, at src/dmx/Cargo.lock.
+
+# =============================================================================
+# WEBSITE ([playground.hosting])
+# =============================================================================
+website/dist/
+website/pkg/
+website/playwright-report/
+website/test-results/
+
+# =============================================================================
+# VS CODE EXTENSION ([editor.extension])
+# =============================================================================
+# Staged by `make vsix` from the release build and from the repo root, and both
+# rebuilt every time. A binary in git is a binary someone eventually ships
+# stale; a second copy of the licence is a licence that drifts from the first.
+src/editors/vscode/bin/
+src/editors/vscode/LICENSE
+src/editors/vscode/.vscode-test/
+*.vsix
+
+# =============================================================================
+# DART
+# =============================================================================
+.dart_tool/
+pubspec.lock
+.coverage/
+
+# The SQLite example's database is built from its schema.sql by
+# `make example-sqlite` — generated, never committed [dartmacros].
+examples/dmx_sqlite_example/tool/dmx/app.db
+
+# Force-commit Claude Code's local settings file: it carries the portfolio-wide
+# "autoMemoryEnabled": false setting ([AGENT-AUTOMEMORY]). Claude Code auto-ignores
+# this file by default, so re-include it explicitly. Keep this LAST so it wins.
+!.claude/settings.local.json

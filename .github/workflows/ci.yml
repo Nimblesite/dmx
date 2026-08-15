@@ -1,0 +1,239 @@
+# agent-pmo:a72c926
+name: CI
+
+on:
+  # CI runs on PRs to the default branch ONLY ([CI-WORKFLOWS]).
+  # Merges/pushes to main trigger NOTHING — main is already-validated code that
+  # arrived through a green PR; re-running CI on the merge is wasted runner time.
+  pull_request:
+    branches: [main]
+
+  # release.yml CALLS this on every v* tag, so a release is gated on the same
+  # suite a pull request has to pass [release.verification]. Called rather than
+  # copied: two definitions of "green" is one too many, and the copy is the one
+  # that rots. A tag is not a re-run of the PR that merged — it names a commit
+  # nobody has necessarily built, and a merge can break what neither side broke.
+  workflow_call:
+    inputs:
+      ref:
+        description: >-
+          Commit to check out. Releases pass the tagged SHA so the suite runs
+          against the bytes being published, never a branch head that has moved
+          on. Defaults to the SHA that triggered the run.
+        type: string
+        required: false
+
+concurrency:
+  # `ci-` prefixed, NOT `${{ github.workflow }}`: inside a called workflow that
+  # expression is the CALLER's name, and concurrency groups are case-insensitive,
+  # so a release calling this would land in release.yml's own `release-<ref>`
+  # group — where cancel-in-progress would abort the release it is gating.
+  group: ci-${{ github.ref }}
+  # A superseded PR push is cancelled. A release's verification is never
+  # cancelled out from under the tag it is gating.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  ci:
+    name: CI
+    # Dependabot PRs are swept into `dependabot-upgrades` by
+    # dependabot-automerge.yml and never merge into main directly, so this would
+    # only burn minutes on a bump we discard. CI runs once, on the
+    # `dependabot-upgrades -> main` consolidation PR. ([GITHUB-DEPENDABOT])
+    if: github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    # Sized against what this job actually does, measured on the first runs that
+    # reached it: ~5 minutes of setup (two `cargo install`s built from source, a
+    # Dart SDK, a Node toolchain, clang+lld) before the first gate, and then a
+    # cold llvm-cov instrumented build, a wasm build, a release build, the Dart
+    # corpus and example, and a Playwright suite. 20 minutes did not cover that.
+    # Still low enough to catch a genuine hang rather than paying for one.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The tagged commit when a release calls this; the SHA that triggered
+          # the run otherwise, which is what checkout would have picked anyway.
+          ref: ${{ inputs.ref || github.sha }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      # The generator emits Dart, and `make corpus` / `make example` prove that
+      # output compiles and analyzes clean — so the Dart SDK is a CI dependency.
+      #
+      # PINNED, never `stable`. `dart format` output is version-dependent, so a
+      # floating SDK makes the format gate a time bomb: a Dart release reformats
+      # a file and CI goes red on a PR that never touched Dart. That is not
+      # hypothetical — it is how this pin came to exist, with the tree formatted
+      # by 3.12.2 and the gate run by 3.13.0. `dart analyze --fatal-infos` is the
+      # same story with newly-added lints, and the golden corpus is the same
+      # story again: the bytes it asserts on are the bytes ONE SDK emits.
+      # deslop and wasm-bindgen-cli are pinned here for the same reason. Bump
+      # this deliberately, in a PR that also reformats under the new SDK.
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: 3.12.2
+
+      # The VS Code extension under src/editors/vscode is a Node package; its
+      # grammar suite runs as part of `make extension`.
+      #
+      # 22, not 20: the extension's coverage measurement passes
+      # `--test-coverage-exclude` so the test files cannot cover themselves, and
+      # that flag does not exist before 22.5. Node 20 would take the flag as an
+      # error and the gate would never run. 22 is also what the Makefile is
+      # developed against, so this closes a local/CI drift rather than opening
+      # one.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Rust tooling
+        run: |
+          rustup component add llvm-tools-preview
+          rustup target add wasm32-unknown-unknown
+          cargo install cargo-llvm-cov --locked
+          cargo install wasm-bindgen-cli --version 0.2.114 --locked
+
+      # tree-sitter-dart does not yet forward Tree-sitter's portable WASM
+      # headers, so the website build needs an LLVM compiler with a wasm backend.
+      - name: Install WebAssembly C toolchain
+        run: sudo apt-get update && sudo apt-get install --yes clang lld
+
+      # fmt, lint, test are three separate, non-overlapping steps.
+      - name: Format check
+        run: make fmt CHECK=1
+
+      - name: Lint
+        run: make lint
+
+      # The version tooling, and proof the VSIX manifest already carries the
+      # crate version ([release.version]). Cheap here, and it is what stops a
+      # tag from failing at the publish step instead of on the PR that made it.
+      - name: Version check
+        run: make version-check
+
+      # Installing is its OWN step because $GITHUB_PATH takes effect in the next
+      # step, never the one that writes it — running the tool in this step is
+      # how the gate spent its whole life exiting 127 instead of measuring
+      # anything.
+      - name: Install deslop
+        env:
+          DESLOP_VERSION: "0.5.1" # pin — see https://github.com/Nimblesite/Deslop/releases
+        run: |
+          curl -sSfL "https://github.com/Nimblesite/Deslop/releases/download/v${DESLOP_VERSION}/deslop-${DESLOP_VERSION}-linux-x64.tar.gz" | tar -xz
+          echo "$PWD/deslop-${DESLOP_VERSION}-linux-x64" >> "$GITHUB_PATH"
+
+      # Duplication gate ([CI-DESLOP]). The threshold lives in committed
+      # .deslop.toml — ratcheted DOWN, never up. `deslop .` reads it and exits 3
+      # (tanks the build) when duplication exceeds it. Through `make deslop` so
+      # this is the same recipe developers run, and so a missing binary fails
+      # loudly here exactly as it does there.
+      - name: Deslop duplication gate
+        run: make deslop
+
+      # make test = fail-fast + coverage + threshold enforcement ([TEST-RULES]).
+      # Thresholds live in coverage-thresholds.json ([COVERAGE-THRESHOLDS-JSON]).
+      - name: Test
+        run: make test
+
+      # The repo's end-to-end gate: every golden sample and every worked example
+      # is regenerated and put through `dart analyze --fatal-infos` + `dart
+      # test`, proving the emitted Dart is real, valid Dart. `example-sqlite`
+      # additionally builds a real database and generates a class from its
+      # schema through a macro written in Dart [dartmacros], and
+      # `example-openapi` generates from a VENDORED OpenAPI document against
+      # captured fixtures — between them the only gates that run a worker end to
+      # end. `dart-package` analyzes and tests the hand-written Dart package all
+      # of them depend on, and is the only gate proving its casing port has not
+      # drifted from `casing.rs` against the shared corpus [context.helpers].
+      # `make extension` tokenizes the real templates with the real VS Code
+      # grammar engine.
+      #
+      # This list MUST equal the one in `make ci` [CI-WORKFLOWS]: a target in one
+      # and not the other is a check that passes locally and never runs on a
+      # pull request, or the reverse. Nothing here may touch the network — since
+      # release.yml calls this workflow [release.verification], a flaky target
+      # blocks a tag, which is why the live OpenAPI suite sits in its own
+      # directory behind `make example-openapi-live` and is NOT run here.
+      - name: End-to-end (golden corpus + examples + extension grammar)
+        run: make dart-package corpus example example-sqlite example-openapi extension
+
+      # The packaged VSIX in a real VS Code [editor.extension.e2e]: rebuilds the
+      # engine, packages the artifact, unpacks it, and drives real editor
+      # sessions over a Dart workspace. Headless Linux needs a display server.
+      - name: VSIX end-to-end (real editor, real engine)
+        run: xvfb-run -a make vsix-e2e
+
+      - name: Install Playwright browser
+        working-directory: website
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Website + WASM playground
+        run: make website
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          # Every path must exist. upload-artifact only fails when NO path
+          # matches, so a stale entry beside a live one uploads a silently
+          # incomplete artifact — `make deslop` writes under .deslop/ now, and
+          # each component writes its own lcov beside itself
+          # ([COVERAGE-THRESHOLDS-JSON]).
+          path: |
+            lcov.info
+            src/dart_packages/dmx/lcov.info
+            src/editors/vscode/lcov.info
+            website/lcov.info
+            .deslop/deslop-report.json
+          retention-days: 7
+
+      - name: Build
+        run: make build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            src/dmx/target/release/dmx
+            website/dist
+          retention-days: 7
+
+  # Dependency review ([GITHUB-DEP-REVIEW]) — blocks PRs that pull in
+  # dependencies with known vulnerabilities. It owns "vulnerable packages";
+  # CodeQL (codeql.yml) owns "vulnerable code"; `make lint` owns style. No
+  # overlap, and no security-rule linter plugins that would re-cover CodeQL.
+  #
+  # The visibility gate mirrors codeql.yml: dependency review needs GitHub
+  # Advanced Security on PRIVATE repos, so gating lets this repo skip cleanly
+  # today (no red X) and self-enable the moment it is made public. Dependabot
+  # alerts still cover the private window.
+  # `pull_request` ONLY: dependency-review diffs a PR's base against its head and
+  # errors outright on any other event, so without this guard a release calling
+  # this workflow would fail here — on a job that has nothing to say about a tag.
+  # The released commit's dependencies were reviewed on the PR that introduced
+  # them; the release's own security gate is CodeQL [GITHUB-CODE-SCANNING].
+  security:
+    name: security
+    if: >-
+      github.event_name == 'pull_request'
+      && github.event.repository.visibility == 'public'
+      && github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write # dependency-review posts its PR summary
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependency review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure

@@ -1,0 +1,10 @@
+{
+  "name": "Mustache",
+  "scopeName": "source.mustache",
+  "comment": "A dmx template is Dart with Mustache tags in it [editor.template-highlighting]. The Dart half is the installed Dart grammar, so it stays correct as Dart does; the Mustache half is injected by mustache-tags.injection.tmLanguage.json, which outranks the Dart rules and so still lights up a tag written inside a Dart string literal. With no Dart grammar installed, the tags highlight and the rest stays plain text.",
+  "patterns": [
+    {
+      "include": "source.dart"
+    }
+  ]
+}

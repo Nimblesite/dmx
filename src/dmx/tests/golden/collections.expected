@@ -1,0 +1,75 @@
+  //#region
+  static Result<Bag, DecodeError> fromJson(Object? json, [String path = 'Bag']) =>
+      switch (json) {
+        {
+          'tags': final List<dynamic> tags,
+          'ids': final List<dynamic> ids,
+          'scores': final Map<String, dynamic> scores,
+        } =>
+          switch ((
+            dmxList<String>(tags, '$path.tags', (value, path) => switch (value) {
+              final String value => Ok(value),
+              _ => Err(DecodeError(path, 'String', value)),
+            }),
+            dmxSet<int>(ids, '$path.ids', (value, path) => switch (value) {
+              final int value => Ok(value),
+              _ => Err(DecodeError(path, 'int', value)),
+            }),
+            dmxMap<double>(scores, '$path.scores', (value, path) => switch (value) {
+              final num value => Ok(value.toDouble()),
+              _ => Err(DecodeError(path, 'double', value)),
+            }),
+          )) {
+            (
+              Ok(value: final tags),
+              Ok(value: final ids),
+              Ok(value: final scores),
+            ) =>
+              Ok(Bag(
+                tags: tags,
+                ids: ids,
+                scores: scores,
+              )),
+            (Err(error: final e), _, _) => Err(e),
+            (_, Err(error: final e), _) => Err(e),
+            (_, _, Err(error: final e)) => Err(e),
+          },
+        _ => Err(DecodeError(path, 'Bag', json)),
+      };
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'tags': tags,
+        'ids': ids.toList(),
+        'scores': scores,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Bag &&
+          dmxDeepEquals(other.tags, tags) &&
+          dmxDeepEquals(other.ids, ids) &&
+          dmxDeepEquals(other.scores, scores));
+
+  @override
+  int get hashCode => Object.hash(
+        runtimeType,
+        dmxDeepHash(tags),
+        dmxDeepHash(ids),
+        dmxDeepHash(scores),
+      );
+
+  @override
+  String toString() => 'Bag(tags: $tags, ids: $ids, scores: $scores)';
+
+  Bag copyWith({
+    List<String>? tags,
+    Set<int>? ids,
+    Map<String, double>? scores,
+  }) =>
+      Bag(
+        tags: tags ?? this.tags,
+        ids: ids ?? this.ids,
+        scores: scores ?? this.scores,
+      );
+  //#endregion

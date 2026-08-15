@@ -1,0 +1,11 @@
+  /// Blends towards [{{otherParam}}] by `t`.
+  ///
+  /// `t` is not clamped: overshooting is what a spring curve does, and
+  /// clamping it here would quietly flatten the animation somebody chose.
+  /// Fields with no meaningful midpoint step at `t = 0.5` instead of
+  /// pretending otherwise.
+  {{className}} lerp({{className}} {{otherParam}}, double t) => {{className}}(
+{{#fields}}
+        {{name}}: {{{blend}}},
+{{/fields}}
+      );

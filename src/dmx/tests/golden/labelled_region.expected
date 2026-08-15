@@ -1,0 +1,38 @@
+  //#region
+  static Result<Coexist, DecodeError> fromJson(Object? json, [String path = 'Coexist']) =>
+      switch (json) {
+        {
+          'id': final String id,
+        } =>
+          Ok(Coexist(
+            id: id,
+          )),
+        _ => Err(DecodeError(path, 'Coexist', json)),
+      };
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'id': id,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Coexist &&
+          other.id == id);
+
+  @override
+  int get hashCode => Object.hash(
+        runtimeType,
+        id,
+      );
+
+  @override
+  String toString() => 'Coexist(id: $id)';
+
+  Coexist copyWith({
+    String? id,
+  }) =>
+      Coexist(
+        id: id ?? this.id,
+      );
+  //#endregion

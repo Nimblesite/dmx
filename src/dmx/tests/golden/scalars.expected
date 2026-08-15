@@ -1,0 +1,87 @@
+  //#region
+  static Result<Scalars, DecodeError> fromJson(Object? json, [String path = 'Scalars']) =>
+      switch (json) {
+        {
+          'when': final String whenValue,
+          'where': final String where,
+          'huge': final String huge,
+          'howLong': final int howLong,
+          'ratio': final num ratio,
+          'count': final num count,
+        } =>
+          switch ((
+            switch (DateTime.tryParse(whenValue)) { final DateTime parsed => Ok<DateTime, DecodeError>(parsed), null => Err<DateTime, DecodeError>(DecodeError('$path.when', 'DateTime', whenValue)) },
+            switch (Uri.tryParse(where)) { final Uri parsed => Ok<Uri, DecodeError>(parsed), null => Err<Uri, DecodeError>(DecodeError('$path.where', 'Uri', where)) },
+            switch (BigInt.tryParse(huge)) { final BigInt parsed => Ok<BigInt, DecodeError>(parsed), null => Err<BigInt, DecodeError>(DecodeError('$path.huge', 'BigInt', huge)) },
+          )) {
+            (
+              Ok(value: final whenValue),
+              Ok(value: final where),
+              Ok(value: final huge),
+            ) =>
+              Ok(Scalars(
+                when: whenValue,
+                where: where,
+                huge: huge,
+                howLong: Duration(microseconds: howLong),
+                ratio: ratio.toDouble(),
+                count: count,
+              )),
+            (Err(error: final e), _, _) => Err(e),
+            (_, Err(error: final e), _) => Err(e),
+            (_, _, Err(error: final e)) => Err(e),
+          },
+        _ => Err(DecodeError(path, 'Scalars', json)),
+      };
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'when': when.toIso8601String(),
+        'where': where.toString(),
+        'huge': huge.toString(),
+        'howLong': howLong.inMicroseconds,
+        'ratio': ratio,
+        'count': count,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Scalars &&
+          other.when == when &&
+          other.where == where &&
+          other.huge == huge &&
+          other.howLong == howLong &&
+          other.ratio == ratio &&
+          other.count == count);
+
+  @override
+  int get hashCode => Object.hash(
+        runtimeType,
+        when,
+        where,
+        huge,
+        howLong,
+        ratio,
+        count,
+      );
+
+  @override
+  String toString() => 'Scalars(when: $when, where: $where, huge: $huge, howLong: $howLong, ratio: $ratio, count: $count)';
+
+  Scalars copyWith({
+    DateTime? when,
+    Uri? where,
+    BigInt? huge,
+    Duration? howLong,
+    double? ratio,
+    num? count,
+  }) =>
+      Scalars(
+        when: when ?? this.when,
+        where: where ?? this.where,
+        huge: huge ?? this.huge,
+        howLong: howLong ?? this.howLong,
+        ratio: ratio ?? this.ratio,
+        count: count ?? this.count,
+      );
+  //#endregion

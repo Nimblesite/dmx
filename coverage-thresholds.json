@@ -1,0 +1,36 @@
+{
+  "_agent_pmo": "a72c926",
+  "_doc": "Single source of truth for code coverage thresholds. See REPO-STANDARDS-SPEC [COVERAGE-THRESHOLDS-JSON]. NO GitHub repo variables. NO env vars. NO public `make coverage-check` target. Read by the internal `_coverage_check` recipe inside `make test`; `make test` exits non-zero if ANY component is below its own threshold. Thresholds are monotonically increasing — ratchet UP only, never down.",
+  "_why_split": "One number across four languages hid the problem it existed to catch. The Rust crate carried the whole repo at 90+, and because nothing else was measured at all, a Dart runtime at 11% and a website at 13% both read as 'coverage: green'. Every component that ships now carries its own floor, measured on its own terms, and a regression in one cannot be paid for by another.",
+  "_measuring": "Every component reports LCOV, and the gate sums LH/LF per component. Field order differs between producers (Node emits LH before LF, vitest emits LF before LH) — summing each field independently is order-independent, which is why the check does that rather than parsing records.",
+  "components": {
+    "rust": {
+      "threshold": 90,
+      "lcov": "lcov.info",
+      "_covers": "The dmx crate at src/dmx — the parser, context builder, renderer, validator and emitter. Everything the binary does.",
+      "_produced_by": "cargo llvm-cov --workspace --all-targets",
+      "_measured": "91.2% when the macro catalogue landed. [COVERAGE-THRESHOLDS] requires 85 for a CLI tool, which this clears."
+    },
+    "dart-package": {
+      "threshold": 13,
+      "lcov": "src/dart_packages/dmx/lcov.info",
+      "_covers": "src/dart_packages/dmx/lib — the published runtime every consumer of dmx depends on: Result/Ok/Err, the decoders, DmxPatch, the transport seam, and the macro-authoring API.",
+      "_produced_by": "dart test --coverage + coverage:format_coverage --report-on=lib",
+      "_measured": "13.1% (54/411 lines) on 2026-08-15, up from 11.4% (47/411) when the release stamper's tests started exercising Result. THE WORST NUMBER IN THE REPO AND THE ONE THAT MATTERS MOST — this package is on pub.dev. dmx.dart, support.dart and transport.dart are still almost entirely unmeasured. The runtime IS exercised end-to-end by the storefront's 179 tests and the golden corpus, which is why nothing has broken; it is not exercised by its own suite, so a refactor of it is unprotected. Ratchet this hard."
+    },
+    "vscode-extension": {
+      "threshold": 95,
+      "lcov": "src/editors/vscode/lcov.info",
+      "_covers": "The extension's testable modules: binary.js (binary resolution) and paths.js (watch-target discovery).",
+      "_produced_by": "node --test --experimental-test-coverage, test files excluded from the measure",
+      "_measured": "98.4% (126/128 lines) on 2026-08-15. NOT the whole extension: extension.js needs the `vscode` module and cannot be loaded outside the editor host, so it is absent from this figure entirely. It is covered by `make vsix-e2e`, which drives a real VS Code instance and is a pass/fail gate rather than a measured one."
+    },
+    "website": {
+      "threshold": 13,
+      "lcov": "website/lcov.info",
+      "_covers": "website/src — the playground's helpers and the sample loader.",
+      "_produced_by": "vitest run --coverage.all --coverage.include='src/**/*.ts'",
+      "_measured": "13.4% (28/209 lines) on 2026-08-15. `--coverage.all` is deliberate: without it v8 reports only files a test imported, and this read 100% while playground.ts (151 lines, the actual playground) went unmeasured. The browser entry points are covered by 24 Playwright tests instead."
+    }
+  }
+}

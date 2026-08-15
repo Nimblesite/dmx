@@ -1,0 +1,8 @@
+name: dmx_golden
+description: Package root for the golden samples so the analyzer resolves package:dmx in place.
+publish_to: none
+environment:
+  sdk: ^3.0.0
+dependencies:
+  dmx:
+    path: ../../../dart_packages/dmx

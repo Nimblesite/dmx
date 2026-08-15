@@ -1,0 +1,53 @@
+  //#region
+  static Result<Stamped, DecodeError> fromJson(Object? json, [String path = 'Stamped']) =>
+      switch (json) {
+        {
+          'id': final String id,
+          'at': final String at,
+        } =>
+          switch ((
+            switch (DateTime.tryParse(at)) { final DateTime parsed => Ok<DateTime, DecodeError>(parsed), null => Err<DateTime, DecodeError>(DecodeError('$path.at', 'DateTime', at)) },
+          )) {
+            (
+              Ok(value: final at),
+            ) =>
+              Ok(Stamped(
+                id: id,
+                at: at,
+              )),
+            (Err(error: final e),) => Err(e),
+          },
+        _ => Err(DecodeError(path, 'Stamped', json)),
+      };
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'id': id,
+        'at': at.toIso8601String(),
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Stamped &&
+          other.id == id &&
+          other.at == at);
+
+  @override
+  int get hashCode => Object.hash(
+        runtimeType,
+        id,
+        at,
+      );
+
+  @override
+  String toString() => 'Stamped(id: $id, at: $at)';
+
+  Stamped copyWith({
+    String? id,
+    DateTime? at,
+  }) =>
+      Stamped(
+        id: id ?? this.id,
+        at: at ?? this.at,
+      );
+  //#endregion

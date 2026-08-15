@@ -1,0 +1,168 @@
+  //#region
+  static Result<Address, DecodeError> fromJson(Map<String, dynamic> json) =>
+      switch (json) {
+        {
+          'street': final String street,
+          'city': final String city,
+        } =>
+          Ok(Address(
+            street: street,
+            city: city,
+          )),
+        _ => Err(DecodeError('Address', 'Address', json)),
+      };
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'street': street,
+        'city': city,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Address &&
+          other.street == street &&
+          other.city == city);
+
+  @override
+  int get hashCode => Object.hash(
+        runtimeType,
+        street,
+        city,
+      );
+
+  @override
+  String toString() => 'Address(street: $street, city: $city)';
+
+  Address copyWith({
+    String? street,
+    String? city,
+  }) =>
+      Address(
+        street: street ?? this.street,
+        city: city ?? this.city,
+      );
+  //#endregion
+  //#region
+  static Result<User, DecodeError> fromJson(Map<String, dynamic> json) =>
+      switch (json) {
+        {
+          'id': final String id,
+          'name': final String name,
+          'tags': final List<dynamic> tags,
+          'created_at': final String createdAt,
+          'scores': final Map<String, dynamic> scores,
+          'roles': final List<dynamic> roles,
+        } =>
+          switch ((
+            dmxNullable<String>(json['email'], 'User.email', (value, path) => switch (value) {
+              final String value => Ok(value),
+              _ => Err(DecodeError(path, 'String', value)),
+            }),
+            dmxList<String>(tags, 'User.tags', (value, path) => switch (value) {
+              final String value => Ok(value),
+              _ => Err(DecodeError(path, 'String', value)),
+            }),
+            switch (DateTime.tryParse(createdAt)) { final DateTime parsed => Ok<DateTime, DecodeError>(parsed), null => Err<DateTime, DecodeError>(DecodeError('User.createdAt', 'DateTime', createdAt)) },
+            dmxNullable<Address>(json['address'], 'User.address', (value, path) => switch (value) {
+              final Map<String, dynamic> value => Address.fromJson(value),
+              _ => Err(DecodeError(path, 'Address', value)),
+            }),
+            dmxMap<int>(scores, 'User.scores', (value, path) => switch (value) {
+              final int value => Ok(value),
+              _ => Err(DecodeError(path, 'int', value)),
+            }),
+            dmxSet<String>(roles, 'User.roles', (value, path) => switch (value) {
+              final String value => Ok(value),
+              _ => Err(DecodeError(path, 'String', value)),
+            }),
+          )) {
+            (
+              Ok(value: final email),
+              Ok(value: final tags),
+              Ok(value: final createdAt),
+              Ok(value: final address),
+              Ok(value: final scores),
+              Ok(value: final roles),
+            ) =>
+              Ok(User(
+                id: id,
+                name: name,
+                email: email,
+                tags: tags,
+                createdAt: createdAt,
+                address: address,
+                scores: scores,
+                roles: roles,
+              )),
+            (Err(error: final e), _, _, _, _, _) => Err(e),
+            (_, Err(error: final e), _, _, _, _) => Err(e),
+            (_, _, Err(error: final e), _, _, _) => Err(e),
+            (_, _, _, Err(error: final e), _, _) => Err(e),
+            (_, _, _, _, Err(error: final e), _) => Err(e),
+            (_, _, _, _, _, Err(error: final e)) => Err(e),
+          },
+        _ => Err(DecodeError('User', 'User', json)),
+      };
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'id': id,
+        'name': name,
+        'email': email,
+        'tags': tags,
+        'created_at': createdAt.toIso8601String(),
+        'address': address?.toJson(),
+        'scores': scores,
+        'roles': roles.toList(),
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is User &&
+          other.id == id &&
+          other.name == name &&
+          other.email == email &&
+          dmxDeepEquals(other.tags, tags) &&
+          other.createdAt == createdAt &&
+          other.address == address &&
+          dmxDeepEquals(other.scores, scores) &&
+          dmxDeepEquals(other.roles, roles));
+
+  @override
+  int get hashCode => Object.hash(
+        runtimeType,
+        id,
+        name,
+        email,
+        dmxDeepHash(tags),
+        createdAt,
+        address,
+        dmxDeepHash(scores),
+        dmxDeepHash(roles),
+      );
+
+  @override
+  String toString() => 'User(id: $id, name: $name, email: $email, tags: $tags, createdAt: $createdAt, address: $address, scores: $scores, roles: $roles)';
+
+  User copyWith({
+    String? id,
+    String? name,
+    DmxPatch<String?> email = const DmxKeep(),
+    List<String>? tags,
+    DateTime? createdAt,
+    DmxPatch<Address?> address = const DmxKeep(),
+    Map<String, int>? scores,
+    Set<String>? roles,
+  }) =>
+      User(
+        id: id ?? this.id,
+        name: name ?? this.name,
+        email: switch (email) { DmxKeep() => this.email, DmxTo(value: final value) => value },
+        tags: tags ?? this.tags,
+        createdAt: createdAt ?? this.createdAt,
+        address: switch (address) { DmxKeep() => this.address, DmxTo(value: final value) => value },
+        scores: scores ?? this.scores,
+        roles: roles ?? this.roles,
+      );
+  //#endregion

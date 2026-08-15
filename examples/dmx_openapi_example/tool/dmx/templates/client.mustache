@@ -1,0 +1,103 @@
+import 'package:dmx/dmx.dart';
+
+import 'api.dart';
+
+{{#docLines}}
+/// {{{line}}}
+{{/docLines}}
+///
+/// Generated from the vendored OpenAPI document for {{title}} {{apiVersion}}:
+/// one method per `operationId`, with the parameters the document declares and
+/// the response schema it promises. Never edit this file.
+///
+/// The client talks to a [DmxTransport] and nothing else, so a test hands it
+/// canned bytes and exercises this very code.
+final class {{className}} {
+  /// Builds a client over `transport`.
+  const {{className}}(this.transport, {this.headers = const {}});
+
+  /// Where the calls go.
+  final DmxTransport transport;
+
+  /// Headers added to every request — auth is yours, not the generator's.
+  final Map<String, String> headers;
+
+  /// The server the document declares.
+  static const String baseUrl = {{{baseUrl}}};
+
+  /// The version of the API this client was generated from.
+  static const String apiVersion = {{{apiVersionLiteral}}};
+
+  /// Every `operationId` the document declares, in document order.
+  static const List<String> operationIds = {{{operationIds}}};
+
+{{#methods}}
+{{#docLines}}
+  /// {{{line}}}
+{{/docLines}}
+  ///
+  /// `{{httpMethod}} {{path}}`
+{{#parameters}}
+  ///
+{{#docLines}}
+  /// {{{line}}}
+{{/docLines}}
+{{/parameters}}
+  Future<Result<{{{returnType}}}, ApiError>> {{name}}({{#hasParameters}}{
+{{#parameters}}
+    {{#isRequired}}required {{/isRequired}}{{{type}}} {{dartName}},
+{{/parameters}}
+  }{{/hasParameters}}) async =>
+      _send(
+        '{{httpMethod}}',
+        {{{pathExpr}}},
+{{#hasQuery}}
+        <String, String>{
+{{#queryParameters}}
+{{#isRequired}}
+          '{{wireName}}': {{{wireExpr}}},
+{{/isRequired}}
+{{^isRequired}}
+          if ({{dartName}} != null) '{{wireName}}': {{{wireExpr}}},
+{{/isRequired}}
+{{/queryParameters}}
+        },
+{{/hasQuery}}
+{{^hasQuery}}
+        const <String, String>{},
+{{/hasQuery}}
+        (body) => {{{decoder}}}(body, '{{{returnType}}}'),
+      );
+
+{{/methods}}
+  /// The one place a call is actually made: build the URL, send it, classify
+  /// the failure, decode the payload.
+  ///
+  /// Every method above is this, with a different path and a different
+  /// decoder — which is exactly the repetition a generator should be absorbing
+  /// rather than a person.
+  Future<Result<T, ApiError>> _send<T>(
+    String method,
+    String path,
+    Map<String, String> query,
+    Result<T, DecodeError> Function(Object? body) decode,
+  ) async =>
+      switch (await transport.send(DmxRequest(
+        method: method,
+        url: Uri.parse('$baseUrl$path').replace(
+          queryParameters: query.isEmpty ? null : query,
+        ),
+        headers: <String, String>{
+          'accept': 'application/json',
+          ...headers,
+        },
+      ))) {
+        Err(error: final failure) => Err(ApiTransportFailure(failure)),
+        Ok(value: final response) when !response.isSuccess =>
+          Err(ApiStatusFailure(response.status, response.body)),
+        Ok(value: final response) => switch (decode(response.body)) {
+            Ok(value: final value) => Ok(value),
+            Err(error: final failure) => Err(ApiDecodeFailure(failure)),
+          },
+      };
+}

@@ -1,0 +1,38 @@
+  static const String baseUrl = {{{baseUrl}}};
+
+  static const Map<String, String> defaultHeaders = <String, String>{
+    'accept': 'application/json',
+  };
+
+{{#methods}}
+  @override
+  Future<Result<{{{returnType}}}, ApiError>> {{name}}({{{signature}}}) async =>
+      switch (await {{transport}}.send(DmxRequest(
+        method: '{{httpMethod}}',
+        url: {{{urlExpr}}},
+        headers: <String, String>{
+          ...defaultHeaders,
+{{#hasBody}}
+          'content-type': 'application/json',
+{{/hasBody}}
+          ...{{headers}},
+        },
+{{#hasBody}}
+        body: {{{bodyExpr}}},
+{{/hasBody}}
+      ))) {
+        Err(error: final e) => Err(ApiTransportFailure(e)),
+        Ok(value: final response) when !response.isSuccess =>
+          Err(ApiStatusFailure(response.status, response.body)),
+{{#decodes}}
+        Ok(value: final response) => switch ({{{decodeExpr}}}) {
+            Ok(value: final value) => Ok(value),
+            Err(error: final e) => Err(ApiDecodeFailure(e)),
+          },
+{{/decodes}}
+{{^decodes}}
+        Ok() => Ok<void, ApiError>(null),
+{{/decodes}}
+      };
+
+{{/methods}}

@@ -1,0 +1,53 @@
+  //#region
+  static Result<Renamed, DecodeError> fromJson(Object? json, [String path = 'Renamed']) =>
+      switch (json) {
+        {
+          'created_at': final String createdAt,
+          'user_name': final String userName,
+        } =>
+          switch ((
+            switch (DateTime.tryParse(createdAt)) { final DateTime parsed => Ok<DateTime, DecodeError>(parsed), null => Err<DateTime, DecodeError>(DecodeError('$path.created_at', 'DateTime', createdAt)) },
+          )) {
+            (
+              Ok(value: final createdAt),
+            ) =>
+              Ok(Renamed(
+                createdAt: createdAt,
+                userName: userName,
+              )),
+            (Err(error: final e),) => Err(e),
+          },
+        _ => Err(DecodeError(path, 'Renamed', json)),
+      };
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'created_at': createdAt.toIso8601String(),
+        'user_name': userName,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Renamed &&
+          other.createdAt == createdAt &&
+          other.userName == userName);
+
+  @override
+  int get hashCode => Object.hash(
+        runtimeType,
+        createdAt,
+        userName,
+      );
+
+  @override
+  String toString() => 'Renamed(createdAt: $createdAt, userName: $userName)';
+
+  Renamed copyWith({
+    DateTime? createdAt,
+    String? userName,
+  }) =>
+      Renamed(
+        createdAt: createdAt ?? this.createdAt,
+        userName: userName ?? this.userName,
+      );
+  //#endregion

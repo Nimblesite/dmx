@@ -1,0 +1,305 @@
+@media (max-width: 1080px) {
+  .hero {
+    min-height: auto;
+    grid-template-columns: minmax(0, 1fr);
+    padding-top: 7rem;
+  }
+  .hero-copy {
+    max-width: 720px;
+    padding-bottom: 4rem;
+  }
+  .hero-stage {
+    width: min(100%, 720px);
+    justify-self: center;
+    margin-bottom: 7rem;
+  }
+  .hero-code-window {
+    transform: none;
+  }
+  .hero-strip {
+    margin-top: 0;
+  }
+  .playground-toolbar {
+    align-items: flex-end;
+  }
+  .macro-picker {
+    grid-template-columns: auto 130px;
+  }
+  .macro-picker > p {
+    display: none;
+  }
+  .tool-button {
+    width: 40px;
+    padding-inline: 11px;
+  }
+  .tool-button-label {
+    display: none;
+  }
+  .macro-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .pipeline-section {
+    grid-template-columns: 1fr;
+  }
+  .pipeline-copy {
+    max-width: 720px;
+  }
+}
+@media (max-width: 780px) {
+  .section-shell,
+  .nav-shell {
+    width: min(100% - 32px, 1240px);
+  }
+  .nav-toggle {
+    display: block;
+  }
+  .site-header[data-open="true"] .nav-toggle span:not(.sr-only):first-of-type {
+    transform: translateY(3px) rotate(45deg);
+  }
+  .site-header[data-open="true"] .nav-toggle span:not(.sr-only):last-child {
+    transform: translateY(-3px) rotate(-45deg);
+  }
+  .nav-menu {
+    position: absolute;
+    top: calc(100% + 1px);
+    right: 0;
+    left: 0;
+    display: none;
+    align-items: stretch;
+    gap: 0;
+    padding: 0.7rem 16px 1rem;
+    border-bottom: 1px solid var(--stroke);
+    background: rgba(8, 11, 16, 0.97);
+    box-shadow: 0 16px 35px rgba(0, 0, 0, 0.3);
+  }
+  .site-header[data-open="true"] .nav-menu {
+    display: flex;
+    flex-direction: column;
+  }
+  .nav-menu > a,
+  .nav-docs > a,
+  .nav-docs summary {
+    padding: 0.7rem 0.8rem;
+  }
+  .nav-docs {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    width: 100%;
+  }
+  .nav-docs details {
+    display: contents;
+  }
+  .nav-docs summary {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .nav-submenu {
+    position: static;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    min-width: 0;
+    margin: 0 0 0.35rem 0.8rem;
+    padding: 0.15rem 0 0.15rem 0.65rem;
+    border: 0;
+    border-left: 1px solid var(--stroke);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .nav-submenu a {
+    padding: 0.58rem 0.75rem;
+    white-space: normal;
+  }
+  .nav-github {
+    margin-top: 0.4rem;
+  }
+  .hero {
+    padding-top: 5rem;
+  }
+  .hero h1 {
+    font-size: clamp(3.4rem, 16vw, 5rem);
+  }
+  .chip-rust {
+    right: -0.5rem;
+  }
+  .hero-strip {
+    flex-wrap: wrap;
+  }
+  .hero-strip p {
+    width: 100%;
+    text-align: center;
+  }
+  .section-heading,
+  .section-heading.compact {
+    grid-template-columns: 1fr;
+    gap: 1.4rem;
+  }
+  .guarantees-section,
+  .macros-section,
+  .pipeline-section {
+    padding-top: 6.5rem;
+    padding-bottom: 6.5rem;
+  }
+  .playground-toolbar {
+    display: grid;
+    align-items: stretch;
+  }
+  /* Stacked editors are taller than one screen: let the page scroll
+     instead of locking to the viewport [playground.interface]. */
+  .playground-page {
+    height: auto;
+    min-height: 100dvh;
+  }
+  .editor-grid {
+    flex: none;
+  }
+  .macro-picker {
+    grid-template-columns: auto 1fr;
+  }
+  .toolbar-actions {
+    justify-content: flex-end;
+  }
+  .editor-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(480px, 62vh) 38px minmax(480px, 62vh);
+  }
+  .playground-main[data-mode="inline"] .editor-grid {
+    grid-template-rows: minmax(480px, 70vh);
+  }
+  .transform-rail {
+    flex-direction: row;
+    border-top: 1px solid var(--stroke-soft);
+    border-right: 0;
+    border-bottom: 1px solid var(--stroke-soft);
+    border-left: 0;
+  }
+  .transform-rail span {
+    width: 64px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(var(--orange-rgb), 0.5));
+  }
+  .transform-rail svg {
+    transform: rotate(90deg);
+  }
+  .guarantee-wide {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+  .macro-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .macro-card.featured {
+    grid-column: span 1;
+  }
+  .footer-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .footer-grid > div {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 520px) {
+  .section-shell,
+  .nav-shell {
+    width: min(100% - 24px, 1240px);
+  }
+  .hero h1 {
+    font-size: clamp(3rem, 18vw, 4.4rem);
+  }
+  .hero-actions .button {
+    width: 100%;
+  }
+  .hero-stage {
+    width: calc(100% + 8px);
+    margin-left: -4px;
+  }
+  .hero-code {
+    font-size: 0.58rem;
+  }
+  .line-no {
+    width: 2.5rem;
+    padding-right: 0.8rem;
+  }
+  .float-chip {
+    display: none;
+  }
+  .hero-strip span,
+  .hero-strip i {
+    display: none;
+  }
+  .hero-strip p {
+    color: var(--ink-soft);
+  }
+  .section-heading h2,
+  .pipeline-copy h2,
+  .closing-card h2 {
+    font-size: 2.65rem;
+  }
+  .playground-toolbar {
+    padding: 1rem;
+  }
+  .editor-pane textarea,
+  .editor-pane pre {
+    padding: 1rem;
+    font-size: 0.69rem;
+  }
+  .input-pane-header > [data-input-metrics] {
+    display: none;
+  }
+  .editor-tab {
+    padding-inline: 0.5rem;
+    font-size: 0.59rem;
+  }
+  .wasm-badge {
+    display: none;
+  }
+  .guarantee-grid,
+  .macro-grid {
+    grid-template-columns: 1fr;
+  }
+  .guarantee-card,
+  .guarantee-wide {
+    min-height: 390px;
+    padding: 1.5rem;
+  }
+  .result-visual {
+    padding-inline: 0;
+  }
+  .byte-visual,
+  .same-file-visual {
+    right: 1.5rem;
+    left: 1.5rem;
+  }
+  .macro-card,
+  .macro-callout {
+    grid-column: auto;
+  }
+  .pipeline-list div {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.1rem;
+  }
+  .closing-card {
+    padding: 5rem 1.2rem;
+  }
+  .footer-grid {
+    gap: 2.5rem 1rem;
+  }
+  .footer-bottom {
+    align-items: flex-start;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.2rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

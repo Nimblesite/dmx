@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18" shape-rendering="crispEdges" role="img" aria-labelledby="title description">
+  <title id="title">dmx pixel transform</title>
+  <desc id="description">A pixel d transforms across a cursor into a pixel x.</desc>
+  <g fill="#67DDF6">
+    <path d="M1 6h2v7H1zM3 4h3v2H3zM3 12h3v2H3zM6 2h2v12H6z"/>
+    <path d="M3 6h3v2H3zM3 10h3v2H3z" opacity=".55"/>
+  </g>
+  <path d="M8 2h2v14H8z" fill="#FFAC72"/>
+  <g fill="#F4F7FB">
+    <path d="M11 4h2v2h-2zM15 4h2v2h-2zM12 6h2v2h-2zM14 6h2v2h-2zM13 8h2v2h-2zM12 10h2v2h-2zM14 10h2v2h-2zM11 12h2v2h-2zM15 12h2v2h-2z"/>
+  </g>
+  <path d="M9 8h2v2H9z" fill="#BDF875"/>
+</svg>

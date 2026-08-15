@@ -1,0 +1,25 @@
+  static const String eventName = {{{eventName}}};
+
+{{#overrides}}
+  @override
+{{/overrides}}
+  String get name => eventName;
+
+  /// A flat parameter map — flat because every analytics SDK in existence
+  /// flattens it anyway, and doing it here means doing it deliberately.
+  ///
+  /// An absent optional parameter is *absent*, not null: a null in an
+  /// analytics payload becomes a real bucket in most backends' dashboards.
+{{#overrides}}
+  @override
+{{/overrides}}
+  Map<String, Object?> get parameters => <String, Object?>{
+{{#parameters}}
+{{#optional}}
+        if ({{name}} case final {{type}} value) {{{key}}}: value,
+{{/optional}}
+{{^optional}}
+        {{{key}}}: {{{encodeExpr}}},
+{{/optional}}
+{{/parameters}}
+      };

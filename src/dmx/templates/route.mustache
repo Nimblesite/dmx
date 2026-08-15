@@ -1,0 +1,51 @@
+  static const String pattern = {{{pattern}}};
+
+{{#overridesLocation}}
+  @override
+{{/overridesLocation}}
+  String get location =>
+{{#hasQuery}}
+      dmxLocation(
+        {{{pathExpr}}},
+        dmxQuery(<String, String?>{
+{{#query}}
+          {{{key}}}: {{{encodeExpr}}},
+{{/query}}
+        }),
+      );
+{{/hasQuery}}
+{{^hasQuery}}
+      {{{pathExpr}}};
+{{/hasQuery}}
+
+  static Result<{{className}}, RouteMismatch> parse(Uri uri) =>
+      switch (uri.pathSegments) {
+        {{{segmentPattern}}} =>
+{{#hasTypedSegments}}
+          switch ((
+{{#typed}}
+            {{{parseExpr}}},
+{{/typed}}
+          )) {
+            (
+{{#typed}}
+              final {{typeName}} {{name}},
+{{/typed}}
+            ) =>
+              Ok({{className}}(
+{{#params}}
+                {{name}}: {{{valueExpr}}},
+{{/params}}
+              )),
+            _ => Err(RouteMismatch(pattern, uri.toString())),
+          },
+{{/hasTypedSegments}}
+{{^hasTypedSegments}}
+          Ok({{className}}(
+{{#params}}
+            {{name}}: {{{valueExpr}}},
+{{/params}}
+          )),
+{{/hasTypedSegments}}
+        _ => Err(RouteMismatch(pattern, uri.toString())),
+      };

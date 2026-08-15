@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 256" role="img" aria-labelledby="title description">
+  <title id="title">dmx stencil wordmark</title>
+  <desc id="description">A custom lowercase dmx wordmark with an inline generation cursor.</desc>
+  <g fill="none" stroke="#67DDF6" stroke-linecap="square" stroke-linejoin="round" stroke-width="38">
+    <path d="M176 42v164h-65c-43 0-66-27-66-78s23-78 66-78 65 27 65 78"/>
+    <path d="M242 206V78m0 39c0-27 16-42 43-42 28 0 43 15 43 42v89m0-89c0-27 16-42 44-42 27 0 43 15 43 42v89"/>
+    <path d="m474 78 136 128"/>
+  </g>
+  <path d="m610 78-136 128" fill="none" stroke="#F4F7FB" stroke-linecap="square" stroke-width="38"/>
+  <circle cx="110" cy="128" r="17" fill="#BDF875"/>
+  <rect x="527" y="112" width="30" height="32" fill="#FFAC72"/>
+</svg>

@@ -1,0 +1,105 @@
+{{#wantsJson}}
+  static Result<{{className}}, DecodeError> fromJson(Object? json, [String path = '{{className}}']) =>
+      switch (json) {
+{{#hasPattern}}
+        {
+{{#fields}}
+{{#inPattern}}
+          {{{jsonKey}}}: final {{{patternType}}} {{bind}},
+{{/inPattern}}
+{{/fields}}
+        } =>
+{{/hasPattern}}
+{{^hasPattern}}
+        final Map<String, dynamic> json =>
+{{/hasPattern}}
+{{#hasComplex}}
+          switch ((
+{{#fields}}
+{{#isComplex}}
+            {{{resultExpr}}},
+{{/isComplex}}
+{{/fields}}
+          )) {
+            (
+{{#fields}}
+{{#isComplex}}
+              Ok(value: final {{bind}}),
+{{/isComplex}}
+{{/fields}}
+            ) =>
+              Ok({{className}}(
+{{#fields}}
+                {{name}}: {{{ctorExpr}}},
+{{/fields}}
+              )),
+{{#fields}}
+{{#isComplex}}
+            {{{errPattern}}} => Err(e),
+{{/isComplex}}
+{{/fields}}
+          },
+{{/hasComplex}}
+{{^hasComplex}}
+          Ok({{className}}(
+{{#fields}}
+            {{name}}: {{{ctorExpr}}},
+{{/fields}}
+          )),
+{{/hasComplex}}
+        _ => Err(DecodeError(path, '{{className}}', json)),
+      };
+
+{{#isVariant}}
+  @override
+{{/isVariant}}
+  Map<String, dynamic> toJson() => <String, dynamic>{
+{{#isVariant}}
+        {{{unionKey}}}: {{{unionTag}}},
+{{/isVariant}}
+{{#fields}}
+        {{{jsonKey}}}: {{{encodeExpr}}},
+{{/fields}}
+      };
+
+{{/wantsJson}}
+{{#wantsEquality}}
+  @override
+  bool operator ==(Object {{otherParam}}) =>
+      identical(this, {{otherParam}}) ||
+      ({{otherParam}} is {{className}}{{#fields}} &&
+          {{{equalsExpr}}}{{/fields}});
+
+{{#hasFields}}
+  @override
+  int get hashCode => {{hashCombiner}}({{#useHashAll}}[{{/useHashAll}}
+        runtimeType,
+{{#fields}}
+        {{{hashExpr}}},
+{{/fields}}
+      {{#useHashAll}}]{{/useHashAll}});
+{{/hasFields}}
+{{^hasFields}}
+  @override
+  int get hashCode => runtimeType.hashCode;
+{{/hasFields}}
+
+{{/wantsEquality}}
+{{#wantsToString}}
+  @override
+  String toString() => '{{className}}({{#fields}}{{{toStringExpr}}}{{^isLast}}, {{/isLast}}{{/fields}})';
+
+{{/wantsToString}}
+{{#wantsCopyWith}}
+  {{className}} copyWith({
+{{#fields}}
+    {{{copyParam}}},
+{{/fields}}
+  }) =>
+      {{className}}(
+{{#fields}}
+        {{{copyArg}}},
+{{/fields}}
+      );
+
+{{/wantsCopyWith}}

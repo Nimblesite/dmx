@@ -1,0 +1,13 @@
+name: dmx_sqlite_schema_example
+description: A dmx macro written in Dart that generates code from a live SQLite schema.
+version: 0.1.0
+publish_to: none
+environment:
+  sdk: ^3.0.0
+
+dependencies:
+  dmx:
+    path: ../../src/dart_packages/dmx
+
+dev_dependencies:
+  test: ^1.25.0

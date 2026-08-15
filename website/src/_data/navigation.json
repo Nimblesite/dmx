@@ -1,0 +1,74 @@
+{
+  "main": [
+    {
+      "text": "Playground",
+      "url": "/playground.html"
+    },
+    {
+      "text": "Docs",
+      "url": "/docs/"
+    },
+    {
+      "text": "Blog",
+      "url": "/blog/"
+    },
+    {
+      "text": "GitHub",
+      "url": "https://github.com/Nimblesite/dmx",
+      "external": true
+    }
+  ],
+  "footer": [
+    {
+      "title": "Docs",
+      "items": [
+        {
+          "text": "Getting started",
+          "url": "/docs/"
+        },
+        {
+          "text": "Dart (Custom) Macros",
+          "url": "/docs/dart-custom-macros/"
+        },
+        {
+          "text": "Macro catalogue",
+          "url": "/docs/macros/"
+        }
+      ]
+    },
+    {
+      "title": "Explore",
+      "items": [
+        {
+          "text": "Playground",
+          "url": "/playground.html"
+        },
+        {
+          "text": "Blog",
+          "url": "/blog/"
+        },
+        {
+          "text": "RSS",
+          "url": "/feed.xml"
+        }
+      ]
+    },
+    {
+      "title": "Project",
+      "items": [
+        {
+          "text": "GitHub",
+          "url": "https://github.com/Nimblesite/dmx"
+        },
+        {
+          "text": "Specification",
+          "url": "https://github.com/Nimblesite/dmx/blob/main/docs/specs/SPEC.md"
+        },
+        {
+          "text": "BSD 3-Clause licence",
+          "url": "https://github.com/Nimblesite/dmx/blob/main/LICENSE"
+        }
+      ]
+    }
+  ]
+}

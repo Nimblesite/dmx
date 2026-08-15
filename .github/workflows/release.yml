@@ -1,0 +1,530 @@
+# agent-pmo:a72c926
+name: Release
+
+# Publishing the VS Code extension and the `dmx` Dart package [release].
+#
+# Both halves ship from one tag and one gate set: the extension carries the
+# generator, and the Dart package carries the `package:dmx` every generated file
+# imports. Releasing one without the other hands users code that does not
+# resolve.
+#
+# A tag is the release, and THE TAG IS THE VERSION. Every package file in the
+# tree carries the placeholder `0.0.0`; each job checks out the tagged commit
+# and stamps what the tag names into its own throwaway checkout before it builds
+# [release.version]. Nothing commits, nothing pushes, and no job checks out a
+# branch. The stamped tree is a pure function of (tagged commit, tag), so
+# `make version VERSION=1.2.3` on the tagged commit reproduces what shipped —
+# nobody bumps a number before tagging, and no tag is ever refused for a file
+# somebody forgot.
+#
+# Nothing publishes until the tagged commit has passed the full suite a pull
+# request has to pass [release.verification] and the security gate below.
+#
+# `workflow_dispatch` is the REHEARSAL and never publishes: it runs the whole
+# matrix and uploads every VSIX as an artifact, so a cross-compile that breaks
+# is found on a button press rather than on a tag that cannot be taken back.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag or SHA to rehearse against (default: the current branch)"
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  # Never cancel a release in flight: a half-published set of platform packages
+  # is worse than a slow one.
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Everything that must agree before a single artifact is built.
+  # ---------------------------------------------------------------------------
+  preflight:
+    name: Preflight
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      publishing: ${{ github.event_name == 'push' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The tagged commit, never a branch — `github.sha` on a tag push IS
+          # the tag's commit. A release built from `main` is a release of
+          # whatever landed after the tag.
+          ref: ${{ inputs.ref || github.sha }}
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      # The version check reads the Dart package's version through `dart pub
+      # deps --json` — pub parses its own pubspec, so nothing parses YAML by
+      # pattern. Pinned to ci.yml's SDK for the reasons given there.
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: 3.12.2
+
+      # The tag names the version, so nothing in the tree can disagree with it
+      # [release.version]. What CAN be wrong is the tree's readiness to be
+      # stamped: a package file somebody bumped by hand, a missing `##
+      # Unreleased` heading, or that heading with nothing written under it —
+      # which would publish a release page saying nothing. All of it is refused
+      # here, before a single artifact is built.
+      - name: Check the tag can be stamped into this tree
+        if: github.event_name == 'push'
+        run: make release-check TAG=${{ github.ref_name }}
+
+      - name: Check the version tooling itself
+        if: github.event_name != 'push'
+        run: make version-check
+
+      # Asked of the script that owns the question, never derived here: one
+      # place decides what a ref is worth. A dispatch has no tag and gets the
+      # placeholder — a rehearsal is not a release, and the bundles it produces
+      # must not claim to be one.
+      - id: version
+        env:
+          REF: ${{ github.event_name == 'push' && github.ref_name || '' }}
+        run: |
+          version=$(node scripts/version.mjs --print "$REF")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "releasing dmx $version"
+
+  # ---------------------------------------------------------------------------
+  # The functional gate [release.verification]. Until this existed a tag
+  # published on nothing but a version check and a `--version` call: no tests, no
+  # golden corpus, no examples, no editor end-to-end. The suite runs against the
+  # tagged SHA, so what ships is what was proven — including `vsix-e2e`, which
+  # drives the packaged extension in a real editor and is the only gate that
+  # covers watch-triggered regeneration where a user actually sees it.
+  #
+  # ci.yml is CALLED, never copied: one definition of "green" [CI-WORKFLOWS].
+  # ---------------------------------------------------------------------------
+  verify:
+    name: Verify
+    needs: preflight
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+    with:
+      ref: ${{ inputs.ref || github.sha }}
+
+  # ---------------------------------------------------------------------------
+  # The security gate. codeql.yml scans the exact released commit with the
+  # current query set and FAILS on any High/Critical finding, which stops the
+  # publish job below.
+  #
+  # On a PRIVATE repo CodeQL needs GitHub Advanced Security, so codeql.yml skips
+  # itself cleanly and this reports `skipped` rather than `success` — which is
+  # why `publish` tests for `!= 'failure'` rather than `== 'success'`. The gate
+  # is vacuous while the repo is private and becomes real the moment it is
+  # public, with no edit here. [GITHUB-CODE-SCANNING]
+  # ---------------------------------------------------------------------------
+  scan:
+    name: Security gate
+    needs: preflight
+    uses: ./.github/workflows/codeql.yml
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    with:
+      gate: true
+
+  # ---------------------------------------------------------------------------
+  # One VSIX per platform, each carrying the binary for it
+  # [editor.extension.binary]. `make vsix` is the single packaging recipe, so
+  # what ships here is what `make rebuild-install-vsix` installs locally
+  # ([MAKE-IDE-EXT-PARITY]).
+  # ---------------------------------------------------------------------------
+  package:
+    name: Package ${{ matrix.vsix }}
+    needs: preflight
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      # One platform failing must not hide the others: the whole point of the
+      # rehearsal is to see every leg at once.
+      fail-fast: false
+      matrix:
+        # Built on the architecture it runs on wherever a runner exists for it,
+        # so `--version` below is a real execution of the real artifact rather
+        # than a hope. Only win32 is cross-compiled, and only because there is
+        # no Windows leg that `make` runs on without installing make first.
+        include:
+          - vsix: linux-x64
+            os: ubuntu-22.04
+            rust: x86_64-unknown-linux-gnu
+            native: true
+          - vsix: linux-arm64
+            os: ubuntu-22.04-arm
+            rust: aarch64-unknown-linux-gnu
+            native: true
+          # A musl build is static, so an x64 runner executes it directly.
+          - vsix: alpine-x64
+            os: ubuntu-22.04
+            rust: x86_64-unknown-linux-musl
+            apt: musl-tools
+            cc: musl-gcc
+            native: true
+          - vsix: alpine-arm64
+            os: ubuntu-22.04-arm
+            rust: aarch64-unknown-linux-musl
+            apt: musl-tools
+            cc: musl-gcc
+            native: true
+          - vsix: win32-x64
+            os: ubuntu-22.04
+            rust: x86_64-pc-windows-gnu
+            apt: gcc-mingw-w64-x86-64
+            cc: x86_64-w64-mingw32-gcc
+          - vsix: darwin-x64
+            os: macos-15-intel
+            rust: x86_64-apple-darwin
+            native: true
+          - vsix: darwin-arm64
+            os: macos-14
+            rust: aarch64-apple-darwin
+            native: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # tree-sitter is C, so a cross build needs a C cross-compiler as well as a
+      # Rust target — the `cc` crate reads CC_<triple> and cargo reads
+      # CARGO_TARGET_<TRIPLE>_LINKER.
+      - name: Install the cross toolchain
+        if: matrix.apt != ''
+        run: sudo apt-get update && sudo apt-get install --yes ${{ matrix.apt }}
+
+      - name: Point cargo and cc at it
+        if: matrix.cc != ''
+        run: |
+          triple=$(echo "${{ matrix.rust }}" | tr 'a-z-' 'A-Z_')
+          {
+            echo "CC_${{ matrix.rust }}=${{ matrix.cc }}"
+            echo "CARGO_TARGET_${triple}_LINKER=${{ matrix.cc }}"
+          } >> "$GITHUB_ENV"
+
+      # VERSION stamps the bundle and reaches the compiler as DMX_VERSION, so
+      # the manifest, the changelog the marketplace page shows, and the binary's
+      # own `--version` all come from the tag in one pass [release.version].
+      - name: Package
+        run: |
+          make vsix \
+            VERSION=${{ needs.preflight.outputs.version }} \
+            VSIX_TARGET=${{ matrix.vsix }} \
+            CARGO_TARGET=${{ matrix.rust }}
+
+      # A VSIX whose binary does not run is a VSIX that installs and then does
+      # nothing — the one failure a user cannot diagnose. Where the runner can
+      # execute what it just built, it must, and it must report the version this
+      # release claims [release.version].
+      - name: The binary runs and knows what it is
+        if: matrix.native
+        run: |
+          built=$(src/dmx/target/${{ matrix.rust }}/release/dmx --version)
+          echo "$built"
+          test "$built" = "dmx ${{ needs.preflight.outputs.version }}"
+
+      # The bundle has to actually contain the binary. `.vscodeignore` is one
+      # careless line away from shipping an empty one.
+      - name: The bundle carries it
+        run: |
+          listing=$(unzip -l "src/dmx/target/dmx-${{ matrix.vsix }}.vsix")
+          echo "$listing"
+          echo "$listing" | grep -qE 'extension/bin/dmx(\.exe)?$'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vsix-${{ matrix.vsix }}
+          path: src/dmx/target/dmx-${{ matrix.vsix }}.vsix
+          retention-days: 14
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # The fallback bundle, carrying no binary at all. The marketplace serves this
+  # to any platform the matrix above does not cover, where the extension
+  # resolves `dmx` from PATH instead [editor.extension.binary]. Without it, an
+  # unmatched platform cannot install the extension at all.
+  # ---------------------------------------------------------------------------
+  package-universal:
+    name: Package universal
+    needs: preflight
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - run: make vsix-universal VERSION=${{ needs.preflight.outputs.version }}
+
+      # The inverse of the check above, and just as load-bearing: a universal
+      # bundle carrying one platform's binary would hand it to every other one.
+      - name: The bundle carries no binary
+        run: |
+          listing=$(unzip -l src/dmx/target/dmx-universal.vsix)
+          echo "$listing"
+          if echo "$listing" | grep -qE 'extension/bin/'; then
+            echo "the universal bundle must not carry a platform binary" >&2
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vsix-universal
+          path: src/dmx/target/dmx-universal.vsix
+          retention-days: 14
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Publish. Tag pushes only — a dispatch is a rehearsal and stops above.
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish
+    needs: [preflight, verify, scan, package, package-universal]
+    # `always()` is required to observe `scan`'s result at all; the clauses then
+    # restate every gate explicitly. `scan` is tested for NOT-failure rather
+    # than success because a private repo skips it — see the scan job's comment.
+    # `verify` is held to `== 'success'`, not `!= 'failure'`: it runs everywhere,
+    # so anything other than a pass means the release was never proven.
+    if: >-
+      always()
+      && github.event_name == 'push'
+      && needs.preflight.result == 'success'
+      && needs.verify.result == 'success'
+      && needs.package.result == 'success'
+      && needs.package-universal.result == 'success'
+      && needs.scan.result != 'failure'
+      && needs.scan.result != 'cancelled'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    # The environment gives the GitHub OIDC token the stable subject
+    # `repo:Nimblesite/dmx:environment:release`, which the
+    # Marketplace publisher's Entra application trusts [release.authentication].
+    environment: release
+    permissions:
+      contents: write # the GitHub release and its attached bundles
+      id-token: write # GitHub OIDC -> Entra; no stored Marketplace PAT
+    env:
+      # The complete set, named once. A platform missing from here is a platform
+      # that silently stops being published.
+      BUNDLES: >-
+        dmx-darwin-arm64.vsix dmx-darwin-x64.vsix
+        dmx-linux-arm64.vsix dmx-linux-x64.vsix
+        dmx-alpine-arm64.vsix dmx-alpine-x64.vsix
+        dmx-win32-x64.vsix dmx-universal.vsix
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # Exchange GitHub's OIDC identity for an Entra session. The application
+      # has Marketplace publisher membership but no Azure subscription role.
+      - uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: bundles
+          pattern: vsix-*
+          merge-multiple: true
+
+      - name: Every bundle this release expects is here
+        run: |
+          ls -l bundles
+          for bundle in $BUNDLES; do
+            test -s "bundles/$bundle" || { echo "missing or empty: $bundle" >&2; exit 1; }
+          done
+
+      - name: Publish to the Visual Studio Marketplace with OIDC
+        run: |
+          set -euo pipefail
+          npm ci --prefix src/editors/vscode
+
+          # Azure DevOps' fixed first-party resource is what `vsce` authenticates
+          # against. Despite the environment variable name required by `vsce`,
+          # this is a short-lived OIDC-derived access token, not a stored PAT.
+          marketplace_token="$(az account get-access-token \
+            --resource 499b84ac-1321-427f-aa17-267ca6975798 \
+            --query accessToken -o tsv)"
+          echo "::add-mask::${marketplace_token}"
+          export VSCE_PAT="${marketplace_token}"
+
+          for bundle in $BUNDLES; do
+            echo "Publishing bundles/$bundle"
+            npx --prefix src/editors/vscode vsce publish \
+              --skip-duplicate \
+              --packagePath "bundles/$bundle"
+          done
+
+      # The bundles are attached to the tag as well, so an air-gapped install or
+      # a rollback never depends on the marketplace serving an old version.
+      - name: Attach the bundles to the tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "dmx ${{ needs.preflight.outputs.version }}" \
+            --notes "Installable from the Visual Studio Marketplace, or from the bundles below.
+
+          See \`src/editors/vscode/CHANGELOG.md\` for what changed." \
+            bundles/*.vsix
+
+  # ---------------------------------------------------------------------------
+  # pub.dev. `src/dart_packages/dmx` is the runtime and macro-authoring API every
+  # generated file imports, so an extension release that does not publish it
+  # ships users generated code whose `package:dmx` does not exist yet.
+  #
+  # Held to the SAME gate set as the marketplace publish, not a looser one. A pub
+  # release cannot be replaced — only retracted — so publishing it on anything
+  # less than the full suite would be the one irreversible step in this workflow
+  # taken on the weakest evidence.
+  #
+  # Runs beside `publish` rather than after it: neither can undo the other, so
+  # serialising them would only mean a marketplace outage withholds a package
+  # that was already proven.
+  # ---------------------------------------------------------------------------
+  publish-pub:
+    name: Publish to pub.dev
+    needs: [preflight, verify, scan, package, package-universal]
+    # Deliberately identical to `publish` — see the reasoning on that job.
+    if: >-
+      always()
+      && github.event_name == 'push'
+      && needs.preflight.result == 'success'
+      && needs.verify.result == 'success'
+      && needs.package.result == 'success'
+      && needs.package-universal.result == 'success'
+      && needs.scan.result != 'failure'
+      && needs.scan.result != 'cancelled'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    # The same environment the marketplace publish uses, so pub.dev's "Require
+    # GitHub Actions environment" setting names `release` too. One environment,
+    # one place to add an approval rule [release.authentication].
+    environment: release
+    permissions:
+      contents: read
+      # GitHub OIDC -> pub.dev. `setup-dart` exchanges this for a short-lived
+      # publishing credential; there is no stored pub.dev token anywhere.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: 3.12.2
+      # `make version` stamps the changelog pub.dev shows on the package page,
+      # and it is a Node script [release.version].
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Republishing an existing version is an ERROR on pub.dev, not a no-op, so
+      # a re-run of a partially failed release would fail here on work that
+      # already succeeded. `vsce publish --skip-duplicate` gives the marketplace
+      # half the same property; this gives it to this half.
+      - name: Skip if this version is already on pub.dev
+        id: published
+        run: |
+          set -euo pipefail
+          version="${{ needs.preflight.outputs.version }}"
+          code=$(curl -sS -o /dev/null -w '%{http_code}' \
+            "https://pub.dev/api/packages/dmx/versions/${version}")
+          echo "pub.dev returned ${code} for dmx ${version}"
+          if [ "$code" = "200" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          elif [ "$code" = "404" ]; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "pub.dev answered ${code}; refusing to guess whether ${version} exists" >&2
+            exit 1
+          fi
+
+      - name: Resolve
+        if: steps.published.outputs.skip != 'true'
+        working-directory: src/dart_packages/dmx
+        run: dart pub get
+
+      # The archive pub would receive, before it receives it. `--dry-run` fails
+      # on anything that would fail the real publish — a missing licence, a file
+      # the package cannot carry, an unresolvable constraint.
+      #
+      # BEFORE the stamp, deliberately. `--dry-run` exits non-zero on any
+      # warning, and one of pub's warnings is "you have uncommitted changes" —
+      # which the stamp is, by design. So the archive's SHAPE is proven here on
+      # the clean tagged checkout, where that warning cannot fire, and the
+      # version it carries is proven by the steps below. Nothing about
+      # publishability depends on which version string is in the file.
+      - name: Prove the archive is publishable
+        if: steps.published.outputs.skip != 'true'
+        working-directory: src/dart_packages/dmx
+        run: dart pub publish --dry-run
+
+      # `lib/src/version.dart` is GENERATED from the pubspec by this package's
+      # own macro worker, so stamping the pubspec means regenerating it — a
+      # package whose `DmxPackage.version` names the previous release is a
+      # package that lies about itself, and pub.dev cannot take it back.
+      #
+      # The generator comes out of the bundle this same release already built
+      # and proved, rather than a second compile of the same commit: the
+      # released binary generates the released runtime.
+      - uses: actions/download-artifact@v4
+        if: steps.published.outputs.skip != 'true'
+        with:
+          name: vsix-linux-x64
+          path: bundle
+
+      - name: Stamp the version this tag names
+        if: steps.published.outputs.skip != 'true'
+        env:
+          VERSION: ${{ needs.preflight.outputs.version }}
+        run: |
+          set -euo pipefail
+          unzip -j -o bundle/dmx-linux-x64.vsix extension/bin/dmx -d bundle
+          chmod +x bundle/dmx
+          test "$(bundle/dmx --version)" = "dmx $VERSION"
+          # The changelog first: pub.dev warns on an archive whose changelog
+          # never mentions the version being published, and shows it either way.
+          make version VERSION="$VERSION"
+          make dart-package-version VERSION="$VERSION" DMX="$PWD/bundle/dmx"
+          git diff --stat
+
+      # `--force` rather than a second `--dry-run`: the tree is deliberately
+      # dirty now, and pub treats that as a warning, not an error. Proven by
+      # `scripts/version.test.mjs` and `test/stamp_version_test.dart`, which
+      # cover what was written; proven again by the `--version` check above,
+      # which is the released binary reporting the released number.
+      - name: Publish
+        if: steps.published.outputs.skip != 'true'
+        working-directory: src/dart_packages/dmx
+        run: dart pub publish --force

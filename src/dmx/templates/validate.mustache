@@ -1,0 +1,27 @@
+  /// Every rule on every field, evaluated once. Order is field order, then
+  /// annotation order within a field, so the list a person sees reads down the
+  /// form the way the form is laid out.
+  ///
+  /// Validation accumulates on purpose. A form that reports one problem, gets
+  /// fixed, and then reports the next one is how you lose someone at checkout.
+  List<Violation> get violations => <Violation>[
+{{#rules}}
+        if ({{{condition}}})
+          const Violation({{{field}}}, {{{message}}}),
+{{/rules}}
+      ];
+
+  bool get isValid => violations.isEmpty;
+
+  /// The whole value as a `Result`, so a caller can pipe it straight into
+  /// whatever comes next without an `if` and without a throw.
+  Result<{{className}}, List<Violation>> validate() => switch (violations) {
+        final List<Violation> found when found.isEmpty => Ok(this),
+        final List<Violation> found => Err(found),
+      };
+
+  /// The violations for one field, ready for a form control's `errorText`.
+  List<String> messagesFor(String field) => <String>[
+        for (final violation in violations)
+          if (violation.field == field) violation.message,
+      ];

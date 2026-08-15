@@ -1,0 +1,95 @@
+# agent-pmo:a72c926
+[package]
+name = "dmx"
+# PLACEHOLDER, never bumped [release.version]. The git tag is the version: a
+# release stamps what the tag names into the bundle around this binary and
+# passes it to the compiler in DMX_VERSION, which is what `dmx --version`
+# reports. This crate is not published to crates.io, so nothing else reads the
+# number, and 0.0.0 is the honest thing for a build nobody tagged to claim.
+version = "0.0.0"
+edition = "2024"
+license = "BSD-3-Clause"
+description = "Dart code generation on save: copyWith, equality, toString and typed JSON, written into the class you annotated. No part files."
+repository = "https://github.com/Nimblesite/dmx"
+homepage = "https://dmx.dev"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+anyhow = "1.0.104"
+blake3 = "1.8.6"
+ramhorns = "1.0.1"
+# Common, NOT wasm-excluded: `render` is the pipeline's render stage and
+# `jsoncontent` is the model it renders, and the playground compiles both —
+# [playground.wasm] requires the WASM exports to call the same pipeline as
+# `dmx build`. Listed under the non-wasm target it built everywhere except the
+# one place a broken build is a broken product demo.
+serde_json = "1.0.151"
+tree-sitter = "0.26.12"
+tree-sitter-dart = { git = "https://github.com/nielsenko/tree-sitter-dart", version = "0.2.0" }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+async-trait = "0.1.92"
+futures-core = "0.3.34"
+lspkit = "0.0.1"
+notify = "8.2.0"
+tokio = { version = "1.53.1", features = ["rt", "sync"] }
+tokio-stream = { version = "0.1.19", features = ["sync"] }
+tokio-util = "0.7.19"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = "0.3.91"
+wasm-bindgen = "0.2.114"
+
+# Test-only parsers for the repository's own configuration [repo.layout]. The
+# workflows are YAML and the editor's settings are JSON-with-comments, and the
+# tests that hold them to the tree have to read them the way their own tools do
+# — a pattern match over either format is exactly what this repo forbids. Both
+# are dev-only: neither reaches the binary or the WASM build.
+[dev-dependencies]
+json_comments = "0.2.2"
+yaml-rust2 = "0.11.0"
+
+# Lints: every rule on, every rule at ERROR ([LINT-RUST]). This is a single-package
+# crate, so the lints sit on the package rather than a `[workspace.lints]` table.
+# Anything switched off below carries the reason why, inline.
+[lints.rust]
+unsafe_code = "deny"
+missing_docs = "deny"
+missing_debug_implementations = "deny"
+unused_imports = "deny"
+dead_code = "deny"
+unused_variables = "deny"
+unused_mut = "deny"
+unused_assignments = "deny"
+unused_results = "deny"
+trivial_casts = "deny"
+trivial_numeric_casts = "deny"
+elided_lifetimes_in_paths = "deny"
+future_incompatible = { level = "deny", priority = -1 }
+nonstandard_style = { level = "deny", priority = -1 }
+rust_2018_idioms = { level = "deny", priority = -1 }
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+indexing_slicing = "deny"
+arithmetic_side_effects = "deny"
+missing_docs_in_private_items = "deny"
+
+# NOTE: `float_arithmetic = "deny"` is INTENTIONALLY NOT enabled here.
+#
+# The lint is useful for a narrow class of repos — cryptography, consensus
+# protocols, money handling, reproducible hashing — where the non-associativity
+# and platform-dependence of IEEE-754 float ops are a real correctness hazard.
+# dmx does no numeric work of that kind, and denying it repo-wide would only buy
+# `#[allow]` suppressions, which this configuration bans. If a module ever needs
+# bit-exact float-free arithmetic, add `#![deny(clippy::float_arithmetic)]` as a
+# module-level attribute there. Do NOT promote it to the crate level.

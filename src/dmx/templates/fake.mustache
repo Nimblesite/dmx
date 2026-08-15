@@ -1,0 +1,32 @@
+  /// A deterministic fixture. Every argument is optional and overrides its
+  /// field, so a test states only what the test is about.
+  ///
+  /// There is no randomness here on purpose: the values come from the seed by
+  /// arithmetic, so a failing test fails identically on the next run, on CI,
+  /// and on the machine of whoever picks it up. Nullable fields default to
+  /// null — the fixture is the *simplest* valid value, not the fullest.
+  static {{className}} fake({
+    int seed = {{seed}},
+{{#fields}}
+    {{{param}}},
+{{/fields}}
+  }) =>
+      {{className}}(
+{{#fields}}
+        {{name}}: {{{value}}},
+{{/fields}}
+      );
+
+  /// `count` distinct fixtures — the seed walks, so no two are equal.
+  static List<{{className}}> fakes(int count, {int seed = {{seed}}}) =>
+      List<{{className}}>.generate(
+        count,
+        (index) => fake(seed: seed + index * 10),
+      );
+
+{{#wantsJson}}
+  /// The fixture already encoded, for exercising a decoder against something
+  /// that is guaranteed to round-trip.
+  static Map<String, dynamic> fakeJson({int seed = {{seed}}}) =>
+      fake(seed: seed).toJson();
+{{/wantsJson}}

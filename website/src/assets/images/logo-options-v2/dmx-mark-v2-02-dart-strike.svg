@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">dmx dart strike</title>
+  <desc id="description">A fast dart projectile passing through a source cursor.</desc>
+  <g transform="rotate(-28 256 256)">
+    <path d="M54 204h108M82 256h92M54 308h108" fill="none" stroke="#67DDF6" stroke-linecap="round" stroke-width="20"/>
+    <rect x="350" y="132" width="28" height="248" rx="14" fill="#FFAC72"/>
+    <path d="M132 256 210 190v46h170l82 20-82 20H210v46l-78-66Z" fill="#67DDF6"/>
+    <path d="m132 256 78-66v46h62l-38 40h-24v46l-78-66Z" fill="#F4F7FB"/>
+    <path d="m380 236 82 20-82 20Z" fill="#F4F7FB"/>
+    <circle cx="364" cy="256" r="13" fill="#BDF875"/>
+  </g>
+</svg>

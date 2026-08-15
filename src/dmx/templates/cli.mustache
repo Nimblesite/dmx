@@ -1,0 +1,76 @@
+  static const String usage = 'Usage: {{command}} [options]{{{restUsage}}}\n'
+      '\n'
+{{#description}}
+      '{{{description}}}\n'
+      '\n'
+{{/description}}
+{{#usageLines}}
+      '{{{text}}}\n'
+{{/usageLines}}
+      ;
+
+  static const Map<String, String> abbreviations = <String, String>{
+{{#abbreviations}}
+    '{{abbr}}': '{{name}}',
+{{/abbreviations}}
+  };
+
+  static const Set<String> flagNames = <String>{
+{{#flags}}
+    '{{wire}}',
+{{/flags}}
+  };
+
+  static const Set<String> optionNames = <String>{
+{{#options}}
+    '{{wire}}',
+{{/options}}
+  };
+
+{{#constrained}}
+  static const Set<String> allowed{{Name}} = <String>{
+{{#allowed}}
+    {{{literal}}},
+{{/allowed}}
+  };
+
+{{/constrained}}
+  /// The scan itself lives in the runtime and takes these tables as arguments,
+  /// so two commands in one file cannot end up sharing one — which is a bug
+  /// that a per-class copy of the scanner invites and this shape forbids.
+  static Result<{{className}}, UsageError> parse(List<String> argv) =>
+      switch (dmxScanArguments(
+        argv,
+        flags: flagNames,
+        options: optionNames,
+        abbreviations: abbreviations,
+        usage: usage,
+      )) {
+        Err(error: final e) => Err(e),
+        Ok(
+          value: (
+            {{{flagsBind}}},
+            {{{optionsBind}}},
+            {{{restBind}}}
+          )
+        ) =>
+          switch ((
+{{#checked}}
+            {{{expr}}},
+{{/checked}}
+          )) {
+{{#checked}}
+            {{{failPattern}}} => Err({{{failure}}}),
+{{/checked}}
+            (
+{{#checked}}
+              final {{typeName}} {{name}},
+{{/checked}}
+            ) =>
+              Ok({{className}}(
+{{#fields}}
+                {{name}}: {{{valueExpr}}},
+{{/fields}}
+              )),
+          },
+      };

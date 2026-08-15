@@ -1,0 +1,157 @@
+{
+  "name": "dmx",
+  "displayName": "dmx — Dart code generation",
+  "description": "Generates copyWith, equality, toString and typed JSON inside your Dart class when you save. No part files, no build_runner.",
+  "version": "0.0.0",
+  "publisher": "nimblesite",
+  "license": "BSD-3-Clause",
+  "icon": "icon.png",
+  "pricing": "Free",
+  "markdown": "github",
+  "qna": "marketplace",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Formatters",
+    "Other"
+  ],
+  "keywords": [
+    "dart",
+    "flutter",
+    "codegen",
+    "mustache",
+    "macros"
+  ],
+  "galleryBanner": {
+    "color": "#0B1020",
+    "theme": "dark"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Nimblesite/dmx.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Nimblesite/dmx/issues"
+  },
+  "homepage": "https://dmx.dev/",
+  "main": "./extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "dmx runs a binary over the files in the folder you open, and `dmx.path` can name a binary inside that folder — so opening an untrusted folder would be running its code. Trust the folder to enable it."
+    }
+  },
+  "extensionKind": [
+    "workspace"
+  ],
+  "activationEvents": [
+    "workspaceContains:**/pubspec.yaml",
+    "onLanguage:dart"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "mustache",
+        "aliases": [
+          "Mustache",
+          "dmx template"
+        ],
+        "extensions": [
+          ".mustache",
+          ".dart.mustache"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "mustache",
+        "scopeName": "source.mustache",
+        "path": "./syntaxes/mustache.tmLanguage.json"
+      },
+      {
+        "scopeName": "mustache.tags.injection",
+        "path": "./syntaxes/mustache-tags.injection.tmLanguage.json",
+        "injectTo": [
+          "source.mustache"
+        ]
+      },
+      {
+        "scopeName": "dmx.dart.injection",
+        "path": "./syntaxes/dmx-dart.injection.tmLanguage.json",
+        "injectTo": [
+          "source.dart"
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "command": "dmx.build",
+        "title": "Build (insert regions)",
+        "category": "dmx"
+      },
+      {
+        "command": "dmx.restartWatcher",
+        "title": "Restart Watcher",
+        "category": "dmx"
+      },
+      {
+        "command": "dmx.stopWatcher",
+        "title": "Stop Watcher",
+        "category": "dmx"
+      },
+      {
+        "command": "dmx.showOutput",
+        "title": "Show Output",
+        "category": "dmx"
+      }
+    ],
+    "configuration": {
+      "title": "dmx",
+      "properties": {
+        "dmx.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "Start `dmx watch` as soon as a workspace folder containing one of `dmx.paths` opens."
+        },
+        "dmx.paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "lib"
+          ],
+          "description": "Workspace-relative paths to generate and watch. Paths that do not exist are skipped."
+        },
+        "dmx.path": {
+          "type": "string",
+          "default": "",
+          "description": "Path to a `dmx` binary. Empty uses the one bundled with this extension, then ./target/{release,debug}/dmx, then ./src/dmx/target/{release,debug}/dmx, then PATH."
+        },
+        "dmx.insertRegions": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run `dmx build --insert-regions` once before watching, so a class annotated while the editor was closed still gets its divider."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "e2e": "node e2e/run.js"
+  },
+  "devDependencies": {
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^3.9.2",
+    "adm-zip": "^0.6.0",
+    "mocha": "^10.7.3",
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.1.0"
+  },
+  "overrides": {
+    "serialize-javascript": "^7.1.0"
+  }
+}

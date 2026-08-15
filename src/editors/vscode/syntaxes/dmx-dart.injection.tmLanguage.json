@@ -1,0 +1,68 @@
+{
+  "name": "dmx annotations and dividers",
+  "scopeName": "dmx.dart.injection",
+  "injectionSelector": "L:source.dart -string",
+  "comment": "What dmx adds to a Dart file, made visible [editor.dart-highlighting]. Two things a reader needs to see and Dart's own grammar cannot know about: the divider marking the bytes the generator owns, and the single `@dmx` trigger that put them there. `L:` outranks the Dart rules, which is what lets the divider read as a divider rather than as one more `//` comment, and lets the macro name inside `@dmx('model')` read as the macro it names rather than as one more string. `-string` keeps a quoted '@dmx' out of it; a doc comment naming the trigger in prose is deliberately left in.",
+  "patterns": [
+    {
+      "include": "#region-begin"
+    },
+    {
+      "include": "#region-end"
+    },
+    {
+      "include": "#dmx-annotation"
+    }
+  ],
+  "repository": {
+    "region-begin": {
+      "comment": "The UNLABELLED divider only. `//#region Helpers` is the author's own fold and dmx never touches it [emission.inline-backend.region-location], so neither does this.",
+      "name": "comment.line.region.begin.dmx",
+      "match": "^\\s*(//#region)[ \\t]*$",
+      "captures": {
+        "1": {
+          "name": "keyword.control.region.begin.dmx"
+        }
+      }
+    },
+    "region-end": {
+      "name": "comment.line.region.end.dmx",
+      "match": "^\\s*(//#endregion)[ \\t]*$",
+      "captures": {
+        "1": {
+          "name": "keyword.control.region.end.dmx"
+        }
+      }
+    },
+    "dmx-annotation": {
+      "comment": "The one trigger [surface.annotations]. The macro is a string because it is data, not a type: the name inside the quotes is what generates, so it is scoped as the macro's name while `@dmx` itself is scoped as the annotation.",
+      "match": "(@)(dmx)\\b(?:\\s*\\(\\s*(?:(')([^']*)(')|(\")([^\"]*)(\")))?",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.annotation.dmx"
+        },
+        "2": {
+          "name": "entity.name.function.decorator.dmx"
+        },
+        "3": {
+          "name": "punctuation.definition.string.begin.dmx"
+        },
+        "4": {
+          "name": "entity.name.function.macro.dmx"
+        },
+        "5": {
+          "name": "punctuation.definition.string.end.dmx"
+        },
+        "6": {
+          "name": "punctuation.definition.string.begin.dmx"
+        },
+        "7": {
+          "name": "entity.name.function.macro.dmx"
+        },
+        "8": {
+          "name": "punctuation.definition.string.end.dmx"
+        }
+      }
+    }
+  }
+}

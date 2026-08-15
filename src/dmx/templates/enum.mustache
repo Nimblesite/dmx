@@ -1,0 +1,54 @@
+  /// The wire name this constant encodes to.
+  String get wire => switch (this) {
+{{#values}}
+        {{enumName}}.{{name}} => {{{wire}}},
+{{/values}}
+      };
+
+  /// A label fit to show a person.
+  String get label => switch (this) {
+{{#values}}
+        {{enumName}}.{{name}} => {{{label}}},
+{{/values}}
+      };
+
+  String toJson() => wire;
+
+  /// The constant with this wire name, or null when nothing matches.
+  static {{enumName}}? tryParse(String wire) => switch (wire) {
+{{#values}}
+        {{{wire}}} => {{enumName}}.{{name}},
+{{/values}}
+        _ => null,
+      };
+
+{{#hasFallback}}
+  /// An unrecognised wire name decodes to [{{{fallback}}}] rather than
+  /// failing: this enum is declared `unknown:`, so a value added upstream
+  /// after this build shipped is data, not an outage.
+  static Result<{{enumName}}, DecodeError> fromJson(
+    Object? json, [
+    String path = '{{enumName}}',
+  ]) =>
+      switch (json) {
+        final String value => Ok(tryParse(value) ?? {{{fallback}}}),
+        _ => Err(DecodeError(path, '{{enumName}}', json)),
+      };
+{{/hasFallback}}
+{{^hasFallback}}
+  static Result<{{enumName}}, DecodeError> fromJson(
+    Object? json, [
+    String path = '{{enumName}}',
+  ]) =>
+      switch (json) {
+        final String value => switch (tryParse(value)) {
+            final {{enumName}} parsed => Ok(parsed),
+            null => Err(DecodeError(path, '{{enumName}}', value)),
+          },
+        _ => Err(DecodeError(path, '{{enumName}}', json)),
+      };
+{{/hasFallback}}
+
+{{#values}}
+  bool get {{isName}} => this == {{enumName}}.{{name}};
+{{/values}}

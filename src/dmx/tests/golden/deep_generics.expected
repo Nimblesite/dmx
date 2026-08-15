@@ -1,0 +1,113 @@
+  //#region
+  static Result<Leaf, DecodeError> fromJson(Object? json, [String path = 'Leaf']) =>
+      switch (json) {
+        {
+          'name': final String name,
+        } =>
+          Ok(Leaf(
+            name: name,
+          )),
+        _ => Err(DecodeError(path, 'Leaf', json)),
+      };
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'name': name,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Leaf &&
+          other.name == name);
+
+  @override
+  int get hashCode => Object.hash(
+        runtimeType,
+        name,
+      );
+
+  @override
+  String toString() => 'Leaf(name: $name)';
+
+  Leaf copyWith({
+    String? name,
+  }) =>
+      Leaf(
+        name: name ?? this.name,
+      );
+  //#endregion
+  //#region
+  static Result<Tree, DecodeError> fromJson(Object? json, [String path = 'Tree']) =>
+      switch (json) {
+        {
+          'grid': final List<dynamic> grid,
+          'groups': final Map<String, dynamic> groups,
+          'leaves': final List<dynamic> leaves,
+        } =>
+          switch ((
+            dmxList<List<int>>(grid, '$path.grid', (value, path) => switch (value) {
+              final List<dynamic> value => dmxList<int>(value, path, (value, path) => switch (value) {
+                final int value => Ok(value),
+                _ => Err(DecodeError(path, 'int', value)),
+              }),
+              _ => Err(DecodeError(path, 'List<int>', value)),
+            }),
+            dmxMap<List<Leaf>>(groups, '$path.groups', (value, path) => switch (value) {
+              final List<dynamic> value => dmxList<Leaf>(value, path, Leaf.fromJson),
+              _ => Err(DecodeError(path, 'List<Leaf>', value)),
+            }),
+            dmxSet<Leaf>(leaves, '$path.leaves', Leaf.fromJson),
+          )) {
+            (
+              Ok(value: final grid),
+              Ok(value: final groups),
+              Ok(value: final leaves),
+            ) =>
+              Ok(Tree(
+                grid: grid,
+                groups: groups,
+                leaves: leaves,
+              )),
+            (Err(error: final e), _, _) => Err(e),
+            (_, Err(error: final e), _) => Err(e),
+            (_, _, Err(error: final e)) => Err(e),
+          },
+        _ => Err(DecodeError(path, 'Tree', json)),
+      };
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'grid': grid,
+        'groups': groups.map((k0, v0) => MapEntry(k0, v0.map((e1) => e1.toJson()).toList())),
+        'leaves': leaves.map((e0) => e0.toJson()).toList(),
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Tree &&
+          dmxDeepEquals(other.grid, grid) &&
+          dmxDeepEquals(other.groups, groups) &&
+          dmxDeepEquals(other.leaves, leaves));
+
+  @override
+  int get hashCode => Object.hash(
+        runtimeType,
+        dmxDeepHash(grid),
+        dmxDeepHash(groups),
+        dmxDeepHash(leaves),
+      );
+
+  @override
+  String toString() => 'Tree(grid: $grid, groups: $groups, leaves: $leaves)';
+
+  Tree copyWith({
+    List<List<int>>? grid,
+    Map<String, List<Leaf>>? groups,
+    Set<Leaf>? leaves,
+  }) =>
+      Tree(
+        grid: grid ?? this.grid,
+        groups: groups ?? this.groups,
+        leaves: leaves ?? this.leaves,
+      );
+  //#endregion

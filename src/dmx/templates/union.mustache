@@ -1,0 +1,63 @@
+  /// Declared on the supertype so `value.toJson()` type-checks without a
+  /// narrowing switch at every call site. Each variant generates the
+  /// implementation, discriminator included.
+  Map<String, dynamic> toJson();
+
+  /// Dispatch on the discriminator, then hand the whole object — tag and all —
+  /// to the variant's own decoder.
+  static Result<{{unionName}}, DecodeError> fromJson(
+    Object? json, [
+    String path = '{{unionName}}',
+  ]) =>
+      switch (json) {
+{{#variants}}
+        { {{{discriminator}}}: {{{tag}}} } => {{name}}.fromJson(json, '$path({{{tagText}}})'),
+{{/variants}}
+        { {{{discriminator}}}: final Object? {{discriminatorBind}} } =>
+          Err(DecodeError('$path.{{{discriminatorText}}}', '{{unionName}}', {{discriminatorBind}})),
+        _ => Err(DecodeError(path, '{{unionName}}', json)),
+      };
+
+  /// Exhaustive by construction: adding a variant to this file makes every
+  /// existing call to [when] a compile error until it is handled.
+  T when<T>({
+{{#variants}}
+    required T Function({{name}} value) {{param}},
+{{/variants}}
+  }) =>
+      switch (this) {
+{{#variants}}
+        final {{name}} value => {{param}}(value),
+{{/variants}}
+      };
+
+  /// The same dispatch with every arm optional. Written with a null-check
+  /// pattern rather than `?.call() ?? orElse()`, which would silently take the
+  /// fallback whenever a handler legitimately returned null.
+  T maybeWhen<T>({
+{{#variants}}
+    T Function({{name}} value)? {{param}},
+{{/variants}}
+    required T Function() orElse,
+  }) =>
+      switch (this) {
+{{#variants}}
+        final {{name}} value => switch ({{param}}) {
+            final handler? => handler(value),
+            null => orElse(),
+          },
+{{/variants}}
+      };
+
+{{#variants}}
+  bool get {{isName}} => this is {{name}};
+{{/variants}}
+
+  /// Narrowing accessors, so a caller that already knows the variant does not
+  /// need a `switch` to say so — and never needs a cast to prove it.
+{{#variants}}
+  {{name}}? get {{asName}} => switch (this) {
+        final {{name}} value => value,
+        _ => null,
+      };
+{{/variants}}

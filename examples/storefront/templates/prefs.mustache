@@ -1,0 +1,44 @@
+  static const String namespace = {{{namespace}}};
+
+{{#entries}}
+  static const String {{keyName}} = {{{key}}};
+{{/entries}}
+
+  static const List<String> keys = <String>[
+{{#entries}}
+    {{keyName}},
+{{/entries}}
+  ];
+
+  /// Total by construction: anything the store cannot supply as the right
+  /// type falls back to the constructor default.
+  ///
+  /// Reading settings never fails. A missing key, a value of the wrong type,
+  /// a string that no longer parses — every one of them falls back. An app
+  /// that will not start because its preferences file is odd is a worse app
+  /// than one that starts with the defaults.
+  static {{className}} read({{storeType}} store) => {{className}}(
+{{#entries}}
+        {{name}}: switch (store.read({{keyName}})) {
+{{#reads}}
+          {{{pattern}}} => {{{expr}}},
+{{/reads}}
+          _ => {{{fallback}}},
+        },
+{{/entries}}
+      );
+
+  /// The stored representation. A `DateTime` goes down as ISO-8601 text
+  /// because every one of these stores can hold a string, and not all of them
+  /// can hold an `int` wide enough for microseconds.
+  Map<String, Object?> get entries => <String, Object?>{
+{{#entries}}
+        {{keyName}}: {{{encodeExpr}}},
+{{/entries}}
+      };
+
+  void writeTo({{storeType}} store) => entries.forEach(store.write);
+
+  /// Wipes only this namespace, so a "reset settings" button cannot take out
+  /// somebody else's keys.
+  static void clear({{storeType}} store) => keys.forEach(store.remove);

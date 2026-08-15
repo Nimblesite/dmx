@@ -1,0 +1,61 @@
+<header class="site-header" data-site-header data-shared-navigation data-open="false">
+  <div class="nav-shell">
+    <a class="brand" href="/" aria-label="dmx home">
+      <img src="/assets/images/dmx-mark.svg" width="36" height="36" alt="">
+      <span>dmx</span>
+    </a>
+
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-navigation" data-nav-toggle>
+      <span class="sr-only">Toggle navigation</span>
+      <span aria-hidden="true"></span>
+      <span aria-hidden="true"></span>
+    </button>
+
+    <nav id="site-navigation" class="nav-menu" aria-label="Main navigation" data-nav-menu>
+      <a href="/playground.html">Playground</a>
+      <div class="nav-docs">
+        <a class="nav-docs-link" href="/docs/">Docs</a>
+        <details>
+          <summary aria-label="Toggle Docs menu">
+            <svg viewBox="0 0 12 8" aria-hidden="true"><path d="m2 2 4 4 4-4"></path></svg>
+          </summary>
+          <div class="nav-submenu">
+            <a href="/docs/">Getting started</a>
+            <a href="/docs/dart-custom-macros/">Dart (Custom) Macros</a>
+            <a href="/docs/macros/">Macro catalogue</a>
+          </div>
+        </details>
+      </div>
+      <a href="/blog/">Blog</a>
+      <a class="nav-github" href="https://github.com/Nimblesite/dmx" target="_blank" rel="noreferrer">
+        GitHub
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 11.5 11.5 4.5M6 4.5h5.5V10"></path></svg>
+      </a>
+    </nav>
+  </div>
+</header>
+<script>
+  (() => {
+    const header = document.currentScript.previousElementSibling;
+    const toggle = header.querySelector("[data-nav-toggle]");
+    const menu = header.querySelector("[data-nav-menu]");
+    const closeMenu = () => {
+      header.dataset.open = "false";
+      toggle.setAttribute("aria-expanded", "false");
+    };
+    toggle.addEventListener("click", () => {
+      const willOpen = header.dataset.open !== "true";
+      header.dataset.open = String(willOpen);
+      toggle.setAttribute("aria-expanded", String(willOpen));
+    });
+    menu.addEventListener("click", (event) => {
+      if (event.target instanceof HTMLAnchorElement) closeMenu();
+    });
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && header.dataset.open === "true") {
+        closeMenu();
+        toggle.focus();
+      }
+    });
+  })();
+</script>

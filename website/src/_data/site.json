@@ -1,0 +1,21 @@
+{
+  "name": "dmx",
+  "title": "dmx — Dart code generation",
+  "description": "Dart code generation on save: copyWith, equality, toString and typed JSON, written into the class you annotated. No part files.",
+  "url": "https://dmx.dev",
+  "stylesheet": "/assets/css/docs.css",
+  "author": "Christian Findlay",
+  "keywords": "Dart, Flutter, code generation, codegen, macros, copyWith, JSON serialization",
+  "themeColor": "#080b10",
+  "favicon": "/assets/images/dmx-mark.svg",
+  "appleTouchIcon": "/assets/images/apple-touch-icon.png",
+  "logo": "/assets/images/dmx-mark.png",
+  "ogImage": "/assets/images/dmx-mark.png",
+  "ogImageWidth": "1200",
+  "ogImageHeight": "1200",
+  "organization": {
+    "name": "dmx",
+    "logo": "/assets/images/dmx-mark.png",
+    "sameAs": ["https://github.com/Nimblesite/dmx"]
+  }
+}

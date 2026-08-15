@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">dmx annotation arrow</title>
+  <desc id="description">A Dart annotation symbol flowing directly into an arrow expression.</desc>
+  <path d="M282 382A156 156 0 1 1 322 178" fill="none" stroke="#67DDF6" stroke-linecap="round" stroke-width="48"/>
+  <circle cx="190" cy="256" r="54" fill="none" stroke="#67DDF6" stroke-width="44"/>
+  <path d="M246 204v82c0 27 17 42 42 42 18 0 31-8 40-23" fill="none" stroke="#67DDF6" stroke-linecap="round" stroke-width="44"/>
+  <path d="M286 224h112M286 288h112" fill="none" stroke="#F4F7FB" stroke-linecap="round" stroke-width="30"/>
+  <path d="m371 188 68 68-68 68" fill="none" stroke="#67DDF6" stroke-linecap="round" stroke-linejoin="round" stroke-width="42"/>
+  <circle cx="286" cy="256" r="15" fill="#FFAC72"/>
+</svg>

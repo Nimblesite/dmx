@@ -1,0 +1,107 @@
+# agent-pmo:a72c926
+# Dependabot — supply-chain defense without PR spam, and without burning CI on
+# `main` for routine bumps. Portfolio standard ([GITHUB-DEPENDABOT]).
+#
+# How this kills the spam — EVERY bump ends up on the `dependabot-upgrades`
+# STAGING branch, swept there automatically by
+# .github/workflows/dependabot-automerge.yml (latest bump clobbers previous):
+#   * VERSION updates -> `target-branch: dependabot-upgrades`. Every routine bump
+#     PR is opened against the staging branch, never against main. ci.yml /
+#     codeql.yml only trigger on `pull_request: [main]` (the filter matches the
+#     PR *base*), so these staging PRs run NO build/test/CodeQL.
+#   * SECURITY updates -> GitHub IGNORES `target-branch` for these and always
+#     opens them against the repo's default branch (`main`). The auto-merge
+#     workflow therefore also fires on `main` and folds the security bump into
+#     the SAME staging branch, then retires the PR — so a CVE bump never sits on
+#     main waiting for a human. (ci.yml/codeql.yml skip Dependabot PRs, so the
+#     matrix never burns on a bump we immediately sweep away.)
+#   * groups -> each ecosystem collapses ALL version bumps (patch, minor AND
+#     major) into ONE PR, and a parallel `*-security` group (`applies-to:
+#     security-updates`) collapses CVE bumps the same way.
+#   * interval: weekly -> one grouped PR per ecosystem each week, not fifty.
+#
+# REQUIREMENT: the `dependabot-upgrades` branch must exist, and
+# .github/workflows/dependabot-automerge.yml must be present. Cut the branch from
+# main AFTER this file + the auto-merge workflow are on main, so the staging
+# branch carries the auto-merge workflow (pull_request runs from the PR base ref).
+version: 2
+
+updates:
+  # GitHub Actions — applies to every repo with workflows. Pinned actions are a
+  # prime supply-chain target, so keep them current.
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: "dependabot-upgrades"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: ["dependencies"]
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  # Cargo / Rust — the dmx CLI itself, self-contained at src/dmx.
+  - package-ecosystem: cargo
+    directory: /src/dmx
+    target-branch: "dependabot-upgrades"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: ["dependencies"]
+    groups:
+      cargo:
+        applies-to: version-updates
+        patterns: ["*"]
+      cargo-security:
+        applies-to: security-updates
+        patterns: ["*"]
+
+  # npm / Node — src/editors/vscode/package.json, the VS Code extension.
+  - package-ecosystem: npm
+    directory: /src/editors/vscode
+    target-branch: "dependabot-upgrades"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: ["dependencies"]
+    groups:
+      npm:
+        applies-to: version-updates
+        patterns: ["*"]
+      npm-security:
+        applies-to: security-updates
+        patterns: ["*"]
+
+  # npm / Node — website tooling and its test runner.
+  - package-ecosystem: npm
+    directory: /website
+    target-branch: "dependabot-upgrades"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: ["dependencies"]
+    groups:
+      website-npm:
+        applies-to: version-updates
+        patterns: ["*"]
+      website-npm-security:
+        applies-to: security-updates
+        patterns: ["*"]
+
+  # pub / Dart — src/dart_packages/dmx/pubspec.yaml, the hand-written runtime
+  # package. `example/` is a generated sample with a path dependency, so it is
+  # deliberately not tracked here.
+  - package-ecosystem: pub
+    directory: /src/dart_packages/dmx
+    target-branch: "dependabot-upgrades"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: ["dependencies"]
+    groups:
+      pub:
+        applies-to: version-updates
+        patterns: ["*"]
+      pub-security:
+        applies-to: security-updates
+        patterns: ["*"]

@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#080b10" />
+    <meta name="color-scheme" content="dark" />
+    <meta
+      name="description"
+      content="Fast, reliable Dart code generation on every save. No generated part files. Team-owned Mustache templates and custom Dart macros."
+    />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://dmx.dev/" />
+    <link rel="icon" href="/assets/images/dmx-mark.svg" type="image/svg+xml" />
+    <link rel="icon" href="/assets/images/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="/assets/images/apple-touch-icon.png" />
+    <link rel="stylesheet" href="/assets/css/base.css" />
+    <link rel="stylesheet" href="/assets/css/layout.css" />
+    <link rel="stylesheet" href="/assets/css/sections.css" />
+    <link rel="stylesheet" href="/assets/css/responsive.css" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="dmx" />
+    <meta property="og:title" content="dmx — Dart code generation on every save" />
+    <meta
+      property="og:description"
+      content="Save a Dart file and see generated code update automatically—without generated part files. Try it in your browser with no install."
+    />
+    <meta property="og:url" content="https://dmx.dev/" />
+    <meta
+      property="og:image"
+      content="https://raw.githubusercontent.com/Nimblesite/dmx/main/website/src/assets/images/dmx-mark.png"
+    />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="1200" />
+    <meta property="og:image:alt" content="A shaded blue faceted dmx mark with an orange splice" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="dmx — Dart code generation on every save" />
+    <meta
+      name="twitter:description"
+      content="Automatic Dart code generation on save. No generated part files. Fully customizable. Try it with no install."
+    />
+    <meta
+      name="twitter:image"
+      content="https://raw.githubusercontent.com/Nimblesite/dmx/main/website/src/assets/images/dmx-mark.png"
+    />
+    <meta name="twitter:image:alt" content="A shaded blue faceted dmx mark with an orange splice" />
+    <title>dmx — Dart code generation on every save</title>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "dmx",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Linux, macOS, Windows, Web",
+        "description": "Fast, reliable Dart code generation on every save, with no generated part files.",
+        "license": "https://opensource.org/license/mit",
+        "codeRepository": "https://github.com/Nimblesite/dmx"
+      }
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to content</a>
+
+    {% include "partials/site-navigation.njk" %}
+
+    <main id="main-content">
+      <section id="top" class="hero section-shell">
+        <div class="hero-glow hero-glow-cyan" aria-hidden="true"></div>
+        <div class="hero-glow hero-glow-lime" aria-hidden="true"></div>
+
+        <div class="hero-copy" data-reveal>
+          <p class="eyebrow"><span></span> Dart macros · code generation on every save</p>
+          <h1>
+            copyWith, equality, JSON.<br />
+            <span class="gradient-text">Generated on save.</span>
+          </h1>
+          <p class="hero-lede">
+            Annotate a Dart class and save it. <strong>dmx</strong> writes the members into the
+            class itself—no <code>part</code> directive, no <code>.g.dart</code> file, no
+            build_runner run. Built-ins cover the usual jobs; Mustache templates and custom Dart
+            macros cover the rest.
+          </p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="./playground.html">
+              Try it in the browser
+              <svg viewBox="0 0 18 18" aria-hidden="true">
+                <path d="m5 9h8M10 6l3 3-3 3" />
+              </svg>
+            </a>
+            <a
+              class="button button-quiet"
+              href="https://marketplace.visualstudio.com/items?itemName=nimblesite.dmx"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Install the watcher
+            </a>
+          </div>
+          <ul class="hero-proof" aria-label="dmx highlights">
+            <li><span class="proof-dot cyan"></span>Automatic on save</li>
+            <li><span class="proof-dot lime"></span>No generated part files</li>
+            <li><span class="proof-dot orange"></span>Fully customizable</li>
+          </ul>
+        </div>
+
+        <div class="hero-stage" data-reveal>
+          <div class="stage-orbit stage-orbit-one" aria-hidden="true"></div>
+          <div class="stage-orbit stage-orbit-two" aria-hidden="true"></div>
+          <div class="code-window hero-code-window">
+            <div class="window-bar">
+              <div class="window-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+              <span>profile.dart</span>
+              <span class="window-state"><i></i> watching</span>
+            </div>
+            <div class="hero-code" aria-label="An annotated Dart model with generated code">
+              <div class="code-line"><span class="line-no">1</span><span class="token-cyan">@dmx</span>('model', {'equality': <span class="token-purple">false</span>, 'toString': <span class="token-purple">false</span>})</div>
+              <div class="code-line"><span class="line-no">2</span><span class="token-purple">class</span> Profile {</div>
+              <div class="code-line"><span class="line-no">3</span>&nbsp;&nbsp;<span class="token-purple">const</span> Profile({<span class="token-purple">required</span> <span class="token-orange">this</span>.id});</div>
+              <div class="code-line"><span class="line-no">4</span></div>
+              <div class="code-line"><span class="line-no">5</span>&nbsp;&nbsp;<span class="token-purple">final</span> String id;</div>
+              <div class="code-line"><span class="line-no">6</span></div>
+              <div class="code-line generated"><span class="line-no">7</span>&nbsp;&nbsp;<span class="token-orange">//#region</span></div>
+              <div class="code-line generated"><span class="line-no">8</span>&nbsp;&nbsp;<span class="token-purple">static</span> Result&lt;Profile, DecodeError&gt; <span class="token-lime">fromJson</span>(Object? json, [String path = 'Profile']) =&gt;</div>
+              <div class="code-line generated"><span class="line-no">9</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="token-purple">switch</span> (json) {</div>
+              <div class="code-line generated"><span class="line-no">10</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{</div>
+              <div class="code-line generated"><span class="line-no">11</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'id': <span class="token-purple">final</span> String id,</div>
+              <div class="code-line generated"><span class="line-no">12</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;} =&gt;</div>
+              <div class="code-line generated"><span class="line-no">13</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Ok(Profile(</div>
+              <div class="code-line generated"><span class="line-no">14</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;id: id,</div>
+              <div class="code-line generated"><span class="line-no">15</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)),</div>
+              <div class="code-line generated"><span class="line-no">16</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_ =&gt; Err(DecodeError(path, 'Profile', json)),</div>
+              <div class="code-line generated"><span class="line-no">17</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;};</div>
+              <div class="code-line generated"><span class="line-no">18</span></div>
+              <div class="code-line generated"><span class="line-no">19</span>&nbsp;&nbsp;Map&lt;String, dynamic&gt; <span class="token-lime">toJson</span>() =&gt; &lt;String, dynamic&gt;{</div>
+              <div class="code-line generated"><span class="line-no">20</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'id': id,</div>
+              <div class="code-line generated"><span class="line-no">21</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;};</div>
+              <div class="code-line generated"><span class="line-no">22</span></div>
+              <div class="code-line generated"><span class="line-no">23</span>&nbsp;&nbsp;Profile <span class="token-lime">copyWith</span>({</div>
+              <div class="code-line generated"><span class="line-no">24</span>&nbsp;&nbsp;&nbsp;&nbsp;String? id,</div>
+              <div class="code-line generated"><span class="line-no">25</span>&nbsp;&nbsp;}) =&gt;</div>
+              <div class="code-line generated"><span class="line-no">26</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Profile(</div>
+              <div class="code-line generated"><span class="line-no">27</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;id: id ?? <span class="token-orange">this</span>.id,</div>
+              <div class="code-line generated"><span class="line-no">28</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;);</div>
+              <div class="code-line generated"><span class="line-no">29</span>&nbsp;&nbsp;<span class="token-orange">//#endregion</span></div>
+              <div class="code-line"><span class="line-no">30</span>}</div>
+            </div>
+          </div>
+          <div class="float-chip chip-rust"><span>↻</span> Updates on save</div>
+          <div class="float-chip chip-safe"><span>✓</span> Validated Dart</div>
+        </div>
+
+        <div class="hero-strip" data-reveal>
+          <p>Generated by</p>
+          <span>built-ins</span><i></i><span>Mustache templates</span><i></i><span>your own Dart macros</span>
+        </div>
+      </section>
+
+      <section id="guarantees" class="guarantees-section section-shell">
+        <div class="section-heading compact" data-reveal>
+          <div>
+            <p class="eyebrow"><span></span> Runs on save · checks Dart before writing</p>
+            <h2>No command to run.<br /><span class="gradient-text">No .g.dart to open.</span></h2>
+          </div>
+          <p>
+            <a href="https://api.dart.dev/dart-core/Object/operator_equals.html">Dart uses identity equality by default</a>,
+            and <a href="https://docs.flutter.dev/data-and-backend/serialization/json">Flutter recommends code generation</a>
+            for larger JSON models. dmx handles that boilerplate without dictating your model shape.
+          </p>
+        </div>
+
+        <div class="guarantee-grid">
+          <article class="guarantee-card guarantee-wide" data-reveal>
+            <div class="card-number">01</div>
+            <div class="card-copy">
+              <p class="card-kicker cyan-text">Watcher</p>
+              <h3>Regenerates when you save.</h3>
+              <p>
+                The VS Code extension starts the watcher when your workspace opens. Saving a file
+                whose generated output changed rewrites it; every other file is left alone.
+              </p>
+            </div>
+            <div class="result-visual" aria-label="A changed and unchanged watched Dart file">
+              <div class="result-row success"><span>Save</span><code>profile.dart · generated members updated</code></div>
+              <div class="result-connector"></div>
+              <div class="result-row failure"><span>Skip</span><code>theme.dart · generated output unchanged</code></div>
+            </div>
+          </article>
+
+          <article class="guarantee-card" data-reveal>
+            <div class="card-number">02</div>
+            <p class="card-kicker lime-text">Validated writes</p>
+            <h3>It never writes broken Dart.</h3>
+            <p>dmx parses the whole candidate file before writing. If generation fails, your file is left exactly as it was.</p>
+            <div class="byte-visual" aria-hidden="true">
+              <span class="user-byte"></span><span class="user-byte"></span><span class="user-byte"></span>
+              <span class="generated-byte"></span><span class="generated-byte"></span>
+              <span class="user-byte"></span><span class="user-byte"></span><span class="user-byte"></span>
+            </div>
+          </article>
+
+          <article class="guarantee-card" data-reveal>
+            <div class="card-number">03</div>
+            <p class="card-kicker orange-text">One complete file</p>
+            <h3>No generated part files.</h3>
+            <p>No <code>.g.dart</code> fragment, no generated mixin, no delegating factory. The members sit in the class, between two <code>//#region</code> markers.</p>
+            <div class="same-file-visual" aria-hidden="true">
+              <div><span>profile.dart</span><i>you</i></div>
+              <svg viewBox="0 0 24 24"><path d="M5 12h14m-4-4 4 4-4 4" /></svg>
+              <div><span>profile.dart</span><i>complete</i></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="macros" class="macros-section section-shell">
+        <div class="section-heading compact" data-reveal>
+          <div>
+            <p class="eyebrow"><span></span> Built-ins · templates · your own macros</p>
+            <h2>Eleven macros ready.<br /><span class="gradient-text">Or write your own.</span></h2>
+          </div>
+          <p>The built-ins cover models, unions, enums, routes, REST clients, and SQL tables. A Mustache template changes what they emit. A Dart macro generates something they do not cover.</p>
+        </div>
+
+        <div class="macro-grid">
+          <article class="macro-card featured" data-reveal><span class="macro-icon">M</span><h3>@dmx('model')</h3><p>Immutable models with JSON, copyWith, equality, hashCode and toString.</p><span class="macro-tag">Core</span></article>
+          <article class="macro-card featured" data-reveal><span class="macro-icon">&#123;&#123;</span><h3>Your Mustache template</h3><p>The built-ins render through Mustache. Edit the template and the emitted Dart matches your conventions.</p><span class="macro-tag">Team-owned output</span></article>
+          <article class="macro-card" data-reveal><span class="macro-icon">D</span><h3>Your Dart macro</h3><p>Dart code that walks the parsed class — its fields, types and annotations — and returns the Dart to emit.</p></article>
+          <article class="macro-card" data-reveal><span class="macro-icon">DB</span><h3>SQLite example</h3><p>A project macro reads a live database and writes one row class per table or view.</p></article>
+          <aside class="macro-callout" data-reveal><span>11</span><p>built-in macros<br />in the current release</p></aside>
+        </div>
+      </section>
+
+      <section id="pipeline" class="pipeline-section section-shell">
+        <div class="pipeline-copy" data-reveal>
+          <p class="eyebrow"><span></span> Every macro takes the same path</p>
+          <h2>Six steps.<br /><span class="gradient-text">Every save.</span></h2>
+          <p>
+            Built-ins, your templates and your Dart macros all run through the same validation and
+            atomic write. Macros that emit a whole file can be committed, or gitignored and rebuilt.
+          </p>
+          <a class="text-link" href="./docs/dart-custom-macros/">
+            Build a custom Dart macro
+            <svg viewBox="0 0 18 18" aria-hidden="true"><path d="m5 9h8M10 6l3 3-3 3" /></svg>
+          </a>
+        </div>
+
+        <ol class="pipeline-list" data-reveal>
+          <li><span>01</span><div><strong>Watch</strong><small>saved Dart files</small></div><i></i></li>
+          <li><span>02</span><div><strong>Inspect</strong><small>typed declarations + project data</small></div><i></i></li>
+          <li><span>03</span><div><strong>Generate</strong><small>built-in, template, or Dart macro</small></div><i></i></li>
+          <li><span>04</span><div><strong>Validate</strong><small>complete candidate Dart</small></div><i></i></li>
+          <li><span>05</span><div><strong>Write</strong><small>inline or complete file</small></div><i></i></li>
+          <li><span>06</span><div><strong>Repeat</strong><small>automatically on the next save</small></div></li>
+        </ol>
+      </section>
+
+      <section class="closing-section section-shell" data-reveal>
+        <div class="closing-card">
+          <div class="closing-mark" aria-hidden="true">
+            <img src="/assets/images/dmx-mark.svg" width="112" height="112" alt="" />
+          </div>
+          <p class="eyebrow"><span></span> No install · no upload</p>
+          <h2>Run it in your browser.<br /><span class="gradient-text">Nothing to install.</span></h2>
+          <p>Edit Dart and the Mustache template, and see what dmx emits. The generator runs in the tab as WebAssembly, so neither input is uploaded.</p>
+          <div class="hero-actions centered">
+            <a class="button button-primary" href="./playground.html">Open the playground</a>
+            <a class="button button-quiet" href="https://marketplace.visualstudio.com/items?itemName=nimblesite.dmx" target="_blank" rel="noreferrer">Install the watcher</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="section-shell footer-grid">
+        <div>
+          <a class="brand" href="#top" aria-label="dmx home">
+            <img src="/assets/images/dmx-mark.svg" width="36" height="36" alt="" />
+            <span>dmx</span>
+          </a>
+          <p>Code generation on every save.<br />No generated part files.</p>
+        </div>
+        <nav aria-label="Product links"><strong>Explore</strong><a href="./playground.html">Playground</a><a href="./docs/">Docs</a><a href="./blog/">Blog</a></nav>
+        <nav aria-label="Project links"><strong>Project</strong><a href="https://github.com/Nimblesite/dmx" target="_blank" rel="noreferrer">GitHub</a><a href="https://github.com/Nimblesite/dmx/blob/main/docs/specs/SPEC.md" target="_blank" rel="noreferrer">Specification</a><a href="https://github.com/Nimblesite/dmx/blob/main/LICENSE" target="_blank" rel="noreferrer">BSD-3-Clause licence</a></nav>
+      </div>
+      <div class="section-shell footer-bottom">
+        <span>© 2026 dmx</span>
+        <span>BSD-3-Clause licensed. Generated code is ordinary Dart.</span>
+      </div>
+    </footer>
+
+    <script>
+      document.documentElement.classList.add("js");
+      const revealItems = document.querySelectorAll("[data-reveal]");
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || !("IntersectionObserver" in window)) {
+        revealItems.forEach((item) => item.dataset.visible = "true");
+      } else {
+        const observer = new IntersectionObserver((entries) => {
+          for (const entry of entries) {
+            if (entry.isIntersecting) {
+              entry.target.dataset.visible = "true";
+              observer.unobserve(entry.target);
+            }
+          }
+        }, { rootMargin: "0px 0px -8%", threshold: 0.12 });
+        revealItems.forEach((item) => observer.observe(item));
+      }
+    </script>
+  </body>
+</html>

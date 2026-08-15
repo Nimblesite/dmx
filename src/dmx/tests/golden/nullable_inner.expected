@@ -1,0 +1,108 @@
+  //#region
+  static Result<Node, DecodeError> fromJson(Object? json, [String path = 'Node']) =>
+      switch (json) {
+        {
+          'label': final String label,
+        } =>
+          Ok(Node(
+            label: label,
+          )),
+        _ => Err(DecodeError(path, 'Node', json)),
+      };
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'label': label,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Node &&
+          other.label == label);
+
+  @override
+  int get hashCode => Object.hash(
+        runtimeType,
+        label,
+      );
+
+  @override
+  String toString() => 'Node(label: $label)';
+
+  Node copyWith({
+    String? label,
+  }) =>
+      Node(
+        label: label ?? this.label,
+      );
+  //#endregion
+  //#region
+  static Result<Holder, DecodeError> fromJson(Object? json, [String path = 'Holder']) =>
+      switch (json) {
+        {
+          'maybeNames': final List<dynamic> maybeNames,
+        } =>
+          switch ((
+            dmxList<String?>(maybeNames, '$path.maybeNames', (value, path) => dmxNullable<String>(value, path, (value, path) => switch (value) {
+              final String value => Ok(value),
+              _ => Err(DecodeError(path, 'String', value)),
+            })),
+            dmxNullable<Node>(dmxKey(json, 'child'), '$path.child', Node.fromJson),
+            dmxNullable<List<Node>>(dmxKey(json, 'children'), '$path.children', (value, path) => switch (value) {
+              final List<dynamic> value => dmxList<Node>(value, path, Node.fromJson),
+              _ => Err(DecodeError(path, 'List<Node>', value)),
+            }),
+          )) {
+            (
+              Ok(value: final maybeNames),
+              Ok(value: final child),
+              Ok(value: final children),
+            ) =>
+              Ok(Holder(
+                maybeNames: maybeNames,
+                child: child,
+                children: children,
+              )),
+            (Err(error: final e), _, _) => Err(e),
+            (_, Err(error: final e), _) => Err(e),
+            (_, _, Err(error: final e)) => Err(e),
+          },
+        _ => Err(DecodeError(path, 'Holder', json)),
+      };
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'maybeNames': maybeNames,
+        'child': child?.toJson(),
+        'children': children?.map((e0) => e0.toJson()).toList(),
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Holder &&
+          dmxDeepEquals(other.maybeNames, maybeNames) &&
+          other.child == child &&
+          dmxDeepEquals(other.children, children));
+
+  @override
+  int get hashCode => Object.hash(
+        runtimeType,
+        dmxDeepHash(maybeNames),
+        child,
+        dmxDeepHash(children),
+      );
+
+  @override
+  String toString() => 'Holder(maybeNames: $maybeNames, child: $child, children: $children)';
+
+  Holder copyWith({
+    List<String?>? maybeNames,
+    DmxPatch<Node?> child = const DmxKeep(),
+    DmxPatch<List<Node>?> children = const DmxKeep(),
+  }) =>
+      Holder(
+        maybeNames: maybeNames ?? this.maybeNames,
+        child: switch (child) { DmxKeep() => this.child, DmxTo(value: final value) => value },
+        children: switch (children) { DmxKeep() => this.children, DmxTo(value: final value) => value },
+      );
+  //#endregion

@@ -1,0 +1,7 @@
+# `live` marks the tests that reach api.frankfurter.dev. They live in
+# `test_live/` rather than `test/`, so a bare `dart test` — and every gate that
+# runs one — is hermetic and needs no network at all. Nothing is skipped: the
+# live suite is run deliberately, by `make example-openapi-live`, which points
+# `dart test` at that directory.
+tags:
+  live:

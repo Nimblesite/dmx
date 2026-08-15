@@ -1,0 +1,22 @@
+{{indent}}/// The API this was generated from.
+{{indent}}static const String title = {{{title}}};
+
+{{indent}}/// The version the document declares.
+{{indent}}static const String apiVersion = {{{apiVersion}}};
+
+{{indent}}/// The server the document declares, and the client's base URL.
+{{indent}}static const String baseUrl = {{{baseUrl}}};
+
+{{indent}}/// Every `operationId` the document declares, in document order.
+{{indent}}static const List<String> operationIds = {{{operationIds}}};
+
+{{indent}}/// Every schema a class was generated for, the macro's own inline
+{{indent}}/// classes included.
+{{indent}}static const List<String> schemaNames = {{{schemaNames}}};
+
+{{indent}}/// The generated file each class lives in, keyed by schema.
+{{indent}}static const Map<String, String> schemaFiles = {
+{{#files}}
+{{indent}}  {{{schema}}}: {{{file}}},
+{{/files}}
+{{indent}}};

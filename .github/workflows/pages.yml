@@ -1,0 +1,103 @@
+# agent-pmo:a72c926
+name: Pages
+
+# The website and the browser playground, published to GitHub Pages
+# [playground.hosting].
+#
+# The playground runs the REAL generator: `make website` compiles the dmx crate
+# to WebAssembly, smoke-tests it in Node, then builds and drives the page with
+# Playwright. Deployment is downstream of all of that on purpose — a site whose
+# playground is broken is worse than no site, because it demonstrates the
+# product failing.
+on:
+  # main is already-validated code that arrived through a green PR ([CI-WORKFLOWS]);
+  # this publishes it rather than re-litigating it. The path filter keeps a
+  # docs-only merge from rebuilding a site it cannot have changed. `src/**` is in
+  # it because the playground IS the generator, and the crate — manifest, lock,
+  # sources and templates alike — is self-contained under `src/dmx`.
+  push:
+    branches: [main]
+    paths:
+      - "website/**"
+      - "src/**"
+      - "scripts/build-wasm.mjs"
+      - "scripts/wasm-smoke.cjs"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # One deployment at a time, and the newest wins: an older commit landing on
+  # the live site after a newer one is the one outcome worth cancelling for.
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install the WebAssembly toolchain
+        run: |
+          rustup target add wasm32-unknown-unknown
+          # llvm-ar, which the C half of tree-sitter is archived with. ci.yml
+          # gets this component for coverage; here it is the whole reason.
+          rustup component add llvm-tools-preview
+          cargo install wasm-bindgen-cli --version 0.2.114 --locked
+
+      # tree-sitter-dart does not yet forward Tree-sitter's portable WASM
+      # headers, so the build needs an LLVM compiler with a wasm backend.
+      - name: Install the WebAssembly C toolchain
+        run: sudo apt-get update && sudo apt-get install --yes clang lld
+
+      - name: Install the browser the playground is proven in
+        working-directory: website
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      # Compiles the generator to wasm, smoke-tests it in Node, type-checks and
+      # builds the site, then drives the built page in a real browser.
+      - name: Build and prove the site
+        run: make website
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/dist
+
+      # Kept whatever the outcome: a playground that fails in CI is exactly the
+      # run whose trace someone needs.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: |
+            website/playwright-report
+            website/test-results
+          retention-days: 7
+          if-no-files-found: ignore
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

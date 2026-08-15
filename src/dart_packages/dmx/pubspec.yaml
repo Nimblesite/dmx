@@ -1,0 +1,27 @@
+name: dmx
+description: >-
+  Infrastructure for the dmx Dart code generator: the @dmx annotation, the
+  runtime, and the API for writing macros in Dart.
+# PLACEHOLDER, never bumped [release.version]. The git tag is the version, and
+# `tool/stamp_version.dart` writes it here in the release's own checkout.
+version: 0.0.0
+repository: https://github.com/Nimblesite/dmx
+issue_tracker: https://github.com/Nimblesite/dmx/issues
+homepage: https://dmx.dev/
+documentation: https://dmx.dev/docs/
+topics:
+  - codegen
+  - macros
+  - json
+  - serialization
+
+environment:
+  sdk: ^3.0.0
+
+# `yaml` is used only by `tool/dmx/macros.dart`, this package's own macro
+# worker, to read the version out of the pubspec above [release.version].
+# Consumers never resolve it.
+dev_dependencies:
+  coverage: ^1.15.1
+  test: ^1.25.0
+  yaml: ^3.1.3

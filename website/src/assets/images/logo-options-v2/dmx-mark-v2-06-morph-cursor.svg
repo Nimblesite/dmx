@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">dmx morph cursor</title>
+  <desc id="description">A circular source becomes square generated code across an inline cursor.</desc>
+  <circle cx="178" cy="256" r="118" fill="#67DDF6"/>
+  <circle cx="178" cy="256" r="52" fill="#0D1219"/>
+  <rect x="236" y="138" width="142" height="236" rx="24" fill="#F4F7FB"/>
+  <rect x="272" y="174" width="70" height="164" rx="12" fill="#0D1219"/>
+  <rect x="224" y="108" width="24" height="296" rx="12" fill="#FFAC72"/>
+  <path d="m378 208 76 48-76 48Z" fill="#67DDF6"/>
+  <rect x="224" y="237" width="48" height="38" rx="8" fill="#BDF875"/>
+</svg>

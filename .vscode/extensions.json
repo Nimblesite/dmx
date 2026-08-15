@@ -1,0 +1,13 @@
+// agent-pmo:a72c926
+{
+  // rust-analyzer is what contributes Rust tests to the Testing panel; without
+  // it installed, `rust-analyzer.testExplorer` in settings.json does nothing.
+  // The nimblesite three are the portfolio-standard recommendations.
+  "recommendations": [
+    "rust-lang.rust-analyzer",
+    "dart-code.dart-code",
+    "nimblesite.commandtree",
+    "nimblesite.too-many-cooks",
+    "nimblesite.typeDiagram"
+  ]
+}

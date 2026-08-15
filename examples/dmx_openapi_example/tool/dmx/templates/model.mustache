@@ -1,0 +1,80 @@
+import 'package:dmx/dmx.dart';
+
+{{#imports}}
+import '{{file}}';
+{{/imports}}
+
+{{#docLines}}
+/// {{{line}}}
+{{/docLines}}
+///
+/// Generated from `components/schemas/{{schemaName}}` of the vendored OpenAPI
+/// document. Change the document and rebuild; never edit this file.
+final class {{className}} {
+{{#properties}}
+{{#docLines}}
+  /// {{{line}}}
+{{/docLines}}
+  final {{{type}}} {{dartName}};
+
+{{/properties}}
+  /// Builds a `{{className}}`.
+  const {{className}}({
+{{#properties}}
+    {{#nullable}}this.{{dartName}}{{/nullable}}{{^nullable}}required this.{{dartName}}{{/nullable}},
+{{/properties}}
+  });
+
+  /// The schema in the document this class was generated from.
+  static const String schemaName = '{{schemaName}}';
+
+  /// Every property the schema declares, in document order.
+  static const List<String> propertyNames = {{{propertyNames}}};
+
+{{#properties}}
+{{#hasEnum}}
+  /// The values the document allows for `{{wireName}}`.
+  static const List<String> {{enumConstant}} = {{{enumValues}}};
+
+{{/hasEnum}}
+{{/properties}}
+  /// One JSON value decoded, or a [DecodeError] naming the first property
+  /// that did not match the schema.
+  static Result<{{className}}, DecodeError> fromJson(
+    Object? json, [
+    String path = '{{className}}',
+  ]) {
+    if (json is! Map<String, Object?>) {
+      return Err(DecodeError(path, '{{className}}', json));
+    }
+{{#hasProperties}}
+{{#properties}}
+    final {{dartName}} = {{{decodeExpr}}};
+{{/properties}}
+    return switch ((
+{{#properties}}
+      {{dartName}},
+{{/properties}}
+    )) {
+      (
+{{#properties}}
+        Ok(value: final {{dartName}}),
+{{/properties}}
+      ) =>
+        Ok({{className}}(
+{{#properties}}
+          {{dartName}}: {{dartName}},
+{{/properties}}
+        )),
+      _ => Err(dmxFirstError(
+          [{{{resultNames}}}],
+          path,
+          '{{className}}',
+        )),
+    };
+{{/hasProperties}}
+{{^hasProperties}}
+    return const Ok({{className}}());
+{{/hasProperties}}
+  }
+}

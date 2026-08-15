@@ -1,0 +1,12 @@
+name: dmx_storefront_example
+description: End-to-end example for dmx inline generation.
+version: 0.1.0
+publish_to: none
+environment:
+  sdk: ^3.0.0
+dependencies:
+  dmx:
+    path: ../../src/dart_packages/dmx
+
+dev_dependencies:
+  test: ^1.25.0

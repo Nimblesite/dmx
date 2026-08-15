@@ -1,0 +1,8 @@
+  /// A deterministic constant: the same seed always names the same one, so a
+  /// fixture that reaches this enum is as stable as the rest of it.
+  static {{enumName}} fake({int seed = {{seed}}}) =>
+      {{enumName}}.values[seed % {{enumName}}.values.length];
+
+  /// `count` constants, walking the declaration order and wrapping.
+  static List<{{enumName}}> fakes(int count, {int seed = {{seed}}}) =>
+      List<{{enumName}}>.generate(count, (index) => fake(seed: seed + index));

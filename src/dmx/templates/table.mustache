@@ -1,0 +1,126 @@
+  static const String tableName = {{{tableName}}};
+
+  static const List<String> columns = <String>[
+{{#columns}}
+    {{{key}}},
+{{/columns}}
+  ];
+
+  static const String createTableSql = 'CREATE TABLE IF NOT EXISTS {{table}} (\n'
+{{#columns}}
+      '  {{column}} {{sqlType}}{{{constraints}}}{{^isLast}},{{/isLast}}\n'
+{{/columns}}
+      ')';
+
+  static const List<String> createIndexSql = <String>[
+{{#indexes}}
+    '{{{statement}}}',
+{{/indexes}}
+  ];
+
+  static const String insertSql = 'INSERT INTO {{table}} '
+      '({{columnList}}) '
+      'VALUES ({{placeholders}})';
+
+  static const String upsertSql = 'INSERT INTO {{table}} '
+      '({{columnList}}) '
+      'VALUES ({{placeholders}}) '
+      'ON CONFLICT({{primaryKey}}) DO UPDATE SET '
+{{#updates}}
+      '{{column}} = excluded.{{column}}{{^isLast}}, {{/isLast}}'
+{{/updates}}
+      ;
+
+  static const String selectAllSql = 'SELECT '
+      '{{columnList}} '
+      'FROM {{table}}';
+
+  static const String selectByIdSql = '$selectAllSql WHERE {{primaryKey}} = ?';
+
+  static const String deleteByIdSql =
+      'DELETE FROM {{table}} WHERE {{primaryKey}} = ?';
+
+  /// Positional arguments for [insertSql] and [upsertSql], in column order.
+  /// Values are bound, never interpolated — that is how injection happens.
+  List<Object?> get insertArgs => <Object?>[
+{{#columns}}
+        {{{encodeExpr}}},
+{{/columns}}
+      ];
+
+  Map<String, Object?> toRow() => <String, Object?>{
+{{#columns}}
+        {{{key}}}: {{{encodeExpr}}},
+{{/columns}}
+      };
+
+  /// A row is data from outside the program, exactly like JSON is, so it is
+  /// decoded exactly like JSON is: patterns, a path, and a `Result`.
+  static Result<{{className}}, DecodeError> fromRow(
+    Map<String, Object?> row, [
+    String path = '{{className}}',
+  ]) =>
+      switch (row) {
+{{#hasPattern}}
+        {
+{{#columns}}
+{{#inPattern}}
+          {{{key}}}: final {{{patternType}}} {{bind}},
+{{/inPattern}}
+{{/columns}}
+        } =>
+{{/hasPattern}}
+{{^hasPattern}}
+        final Map<String, Object?> row =>
+{{/hasPattern}}
+{{#hasComplex}}
+          switch ((
+{{#columns}}
+{{#isComplex}}
+            {{{resultExpr}}},
+{{/isComplex}}
+{{/columns}}
+          )) {
+            (
+{{#columns}}
+{{#isComplex}}
+              Ok(value: final {{bind}}),
+{{/isComplex}}
+{{/columns}}
+            ) =>
+              Ok({{className}}(
+{{#columns}}
+                {{name}}: {{{ctorExpr}}},
+{{/columns}}
+              )),
+{{#columns}}
+{{#isComplex}}
+            {{{errPattern}}} => Err(e),
+{{/isComplex}}
+{{/columns}}
+          },
+{{/hasComplex}}
+{{^hasComplex}}
+          Ok({{className}}(
+{{#columns}}
+            {{name}}: {{{ctorExpr}}},
+{{/columns}}
+          )),
+{{/hasComplex}}
+        _ => Err(DecodeError(path, '{{className}}', row)),
+      };
+
+  /// Decodes a whole result set, failing on the first bad row and saying
+  /// which one it was.
+  static Result<List<{{className}}>, DecodeError> fromRows(
+    List<Map<String, Object?>> rows, [
+    String path = '{{className}}',
+  ]) =>
+      dmxList<{{className}}>(
+        rows,
+        path,
+        (value, path) => switch (value) {
+          final Map<String, Object?> row => fromRow(row, path),
+          _ => Err(DecodeError(path, '{{className}}', value)),
+        },
+      );

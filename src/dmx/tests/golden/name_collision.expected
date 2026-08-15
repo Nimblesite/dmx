@@ -1,0 +1,45 @@
+  //#region
+  static Result<Collide, DecodeError> fromJson(Object? json, [String path = 'Collide']) =>
+      switch (json) {
+        {
+          'other': final String other,
+          'value': final int value,
+        } =>
+          Ok(Collide(
+            other: other,
+            value: value,
+          )),
+        _ => Err(DecodeError(path, 'Collide', json)),
+      };
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'other': other,
+        'value': value,
+      };
+
+  @override
+  bool operator ==(Object that) =>
+      identical(this, that) ||
+      (that is Collide &&
+          that.other == other &&
+          that.value == value);
+
+  @override
+  int get hashCode => Object.hash(
+        runtimeType,
+        other,
+        value,
+      );
+
+  @override
+  String toString() => 'Collide(other: $other, value: $value)';
+
+  Collide copyWith({
+    String? other,
+    int? value,
+  }) =>
+      Collide(
+        other: other ?? this.other,
+        value: value ?? this.value,
+      );
+  //#endregion

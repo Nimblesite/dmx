@@ -1,0 +1,71 @@
+  //#region
+  static Result<Config, DecodeError> fromJson(Object? json, [String path = 'Config']) =>
+      switch (json) {
+        final Map<String, dynamic> json =>
+          switch ((
+            dmxNullable<String>(dmxKey(json, 'host'), '$path.host', (value, path) => switch (value) {
+              final String value => Ok(value),
+              _ => Err(DecodeError(path, 'String', value)),
+            }),
+            dmxNullable<int>(dmxKey(json, 'port'), '$path.port', (value, path) => switch (value) {
+              final int value => Ok(value),
+              _ => Err(DecodeError(path, 'int', value)),
+            }),
+            dmxNullable<bool>(dmxKey(json, 'debug'), '$path.debug', (value, path) => switch (value) {
+              final bool value => Ok(value),
+              _ => Err(DecodeError(path, 'bool', value)),
+            }),
+          )) {
+            (
+              Ok(value: final host),
+              Ok(value: final port),
+              Ok(value: final debug),
+            ) =>
+              Ok(Config(
+                host: host,
+                port: port,
+                debug: debug,
+              )),
+            (Err(error: final e), _, _) => Err(e),
+            (_, Err(error: final e), _) => Err(e),
+            (_, _, Err(error: final e)) => Err(e),
+          },
+        _ => Err(DecodeError(path, 'Config', json)),
+      };
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'host': host,
+        'port': port,
+        'debug': debug,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Config &&
+          other.host == host &&
+          other.port == port &&
+          other.debug == debug);
+
+  @override
+  int get hashCode => Object.hash(
+        runtimeType,
+        host,
+        port,
+        debug,
+      );
+
+  @override
+  String toString() => 'Config(host: $host, port: $port, debug: $debug)';
+
+  Config copyWith({
+    DmxPatch<String?> host = const DmxKeep(),
+    DmxPatch<int?> port = const DmxKeep(),
+    DmxPatch<bool?> debug = const DmxKeep(),
+  }) =>
+      Config(
+        host: switch (host) { DmxKeep() => this.host, DmxTo(value: final value) => value },
+        port: switch (port) { DmxKeep() => this.port, DmxTo(value: final value) => value },
+        debug: switch (debug) { DmxKeep() => this.debug, DmxTo(value: final value) => value },
+      );
+  //#endregion

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">dmx hot loop</title>
+  <desc id="description">An open lowercase d loop emits regenerated source blocks.</desc>
+  <path d="M334 382A160 160 0 1 1 334 134V68" fill="none" stroke="#67DDF6" stroke-linecap="round" stroke-linejoin="round" stroke-width="58"/>
+  <rect x="306" y="130" width="90" height="24" rx="12" fill="#BDF875"/>
+  <rect x="354" y="185" width="60" height="60" rx="12" fill="#F4F7FB"/>
+  <rect x="420" y="123" width="46" height="46" rx="10" fill="#67DDF6"/>
+  <rect x="463" y="72" width="30" height="30" rx="7" fill="#BDF875"/>
+</svg>

@@ -1,0 +1,419 @@
+/* The playground lives on its own page and fills the whole viewport
+   [playground.interface]. The header keeps its natural height; the shell
+   flexes to consume every remaining pixel, edge to edge. */
+.playground-page {
+  display: flex;
+  height: 100dvh;
+  flex-direction: column;
+}
+.playground-main {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+}
+.playground-shell {
+  position: relative;
+  display: flex;
+  overflow: hidden;
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  margin: 0;
+  background: rgba(12, 17, 24, 0.96);
+}
+.playground-toolbar,
+.playground-status {
+  flex: 0 0 auto;
+}
+.playground-shell::before {
+  position: absolute;
+  top: 0;
+  right: 10%;
+  left: 10%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--cyan), var(--lime), transparent);
+  content: "";
+  opacity: 0.6;
+}
+.playground-toolbar {
+  display: flex;
+  min-height: 92px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1.1rem 1.3rem 1.1rem 1.5rem;
+  border-bottom: 1px solid var(--stroke-soft);
+  background: linear-gradient(180deg, rgba(22, 31, 43, 0.68), rgba(15, 22, 31, 0.7));
+}
+.macro-picker {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: auto 268px minmax(210px, 1fr);
+  align-items: center;
+  gap: 0.65rem;
+}
+.macro-picker > label {
+  color: var(--ink-muted);
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.macro-picker > p {
+  max-width: 360px;
+  margin: 0 0 0 0.4rem;
+  overflow: hidden;
+  color: var(--ink-muted);
+  font-size: 0.73rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.select-wrap {
+  position: relative;
+}
+.select-wrap select {
+  width: 100%;
+  min-height: 40px;
+  padding: 0.4rem 2rem 0.4rem 0.75rem;
+  appearance: none;
+  border: 1px solid var(--stroke);
+  border-radius: 9px;
+  background: #101821;
+  color: var(--cyan);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.select-wrap svg {
+  position: absolute;
+  top: 50%;
+  right: 0.65rem;
+  width: 16px;
+  transform: translateY(-50%);
+  fill: none;
+  stroke: var(--ink-muted);
+  stroke-linecap: round;
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+.toolbar-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.5rem;
+}
+.tool-button {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--stroke);
+  border-radius: 9px;
+  background: #111923;
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  font-weight: 700;
+  transition: border-color 160ms ease, color 160ms ease, background 160ms ease;
+}
+.tool-button:hover:not(:disabled) {
+  border-color: #455a72;
+  color: var(--ink);
+}
+.tool-button svg {
+  width: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.55;
+}
+.mode-toggle {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--stroke);
+  border-radius: 9px;
+  background: #111923;
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 160ms ease, color 160ms ease;
+}
+.mode-toggle:hover {
+  border-color: #455a72;
+  color: var(--ink);
+}
+.mode-toggle input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--cyan);
+}
+.editor-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+  flex: 1;
+}
+/* Inline watch mode: the Dart editor is the whole file, dividers included,
+   so the transform rail and output pane leave the layout entirely
+   [playground.interface.inline-mode]. */
+.playground-main[data-mode="inline"] .editor-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.playground-main[data-mode="inline"] .transform-rail,
+.playground-main[data-mode="inline"] .output-pane {
+  display: none;
+}
+/* minmax(0, 1fr) everywhere: a bare 1fr row refuses to shrink below its
+   content, which would grow the pane past the viewport-locked shell and
+   leave the code panes unscrollable. */
+.editor-pane {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: 48px minmax(0, 1fr) 36px;
+  background: #0a0f15;
+}
+.editor-pane > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem;
+  border-bottom: 1px solid var(--stroke-soft);
+  background: #0f161f;
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+}
+.editor-pane > header div {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+.input-pane-header {
+  gap: 0.8rem;
+  padding-left: 0.55rem !important;
+}
+.editor-tabs {
+  align-self: stretch;
+  gap: 0.2rem !important;
+}
+.editor-tab {
+  position: relative;
+  display: inline-flex;
+  height: 100%;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0 0.65rem;
+  border: 0;
+  background: transparent;
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-weight: 650;
+}
+.editor-tab::after {
+  position: absolute;
+  right: 0.6rem;
+  bottom: -1px;
+  left: 0.6rem;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--cyan);
+  content: "";
+  opacity: 0;
+  transform: scaleX(0.6);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+.editor-tab:hover {
+  color: var(--ink-soft);
+}
+.editor-tab[aria-selected="true"] {
+  color: var(--ink);
+}
+.editor-tab[aria-selected="true"]::after {
+  opacity: 1;
+  transform: scaleX(1);
+}
+.editor-tab[data-editor-tab="template"]::after {
+  background: var(--orange);
+}
+.pane-dot.orange {
+  background: var(--orange);
+  box-shadow: 0 0 10px rgba(var(--orange-rgb), 0.55);
+}
+.editor-pane h3 {
+  margin: 0;
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+.input-workspace,
+.editor-panel {
+  min-width: 0;
+  min-height: 0;
+}
+.editor-panel {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+.editor-panel[hidden] {
+  display: none;
+}
+.editor-pane textarea,
+.editor-pane pre {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 1.35rem 1.4rem;
+  overflow: auto;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #c8d2df;
+  font-size: 0.77rem;
+  line-height: 1.75;
+  tab-size: 2;
+  white-space: pre;
+}
+.editor-pane textarea {
+  position: relative;
+  z-index: 1;
+  resize: none;
+  background: transparent;
+  caret-color: var(--cyan);
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+.editor-highlight {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+}
+.editor-highlight code,
+.output-pane [data-source-output] {
+  display: block;
+  min-width: max-content;
+  min-height: 100%;
+}
+.editor-highlight code {
+  font-size: inherit;
+  line-height: inherit;
+}
+.template-panel {
+  background:
+    linear-gradient(90deg, rgba(var(--orange-rgb), 0.025), transparent 28%),
+    #0a0f15;
+}
+.template-panel textarea {
+  caret-color: var(--orange);
+}
+.editor-pane textarea:focus-visible,
+.editor-pane pre:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--cyan);
+}
+.template-panel textarea:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--orange);
+}
+.output-pane pre {
+  color: #d0dbcf;
+}
+.token.keyword,
+.token.boolean { color: #c5a8ff; }
+.token.class-name,
+.token.function { color: var(--cyan); }
+.token.string,
+.token.number,
+.token.attr-name { color: var(--lime); }
+.token.comment { color: #65758a; font-style: italic; }
+.token.metadata,
+.token.operator { color: var(--orange); }
+.token.handlebars { color: var(--orange); }
+.token.handlebars .token.variable { color: var(--cyan); }
+.token.punctuation { color: #aeb9c7; }
+.pane-hint {
+  margin: 0;
+  padding: 0.55rem 1rem;
+  border-top: 1px solid var(--stroke-soft);
+  background: #0d131b;
+  color: #59687a;
+  font-size: 0.63rem;
+}
+.transform-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  border-right: 1px solid var(--stroke-soft);
+  border-left: 1px solid var(--stroke-soft);
+  background: #101720;
+}
+.transform-rail span {
+  width: 1px;
+  height: 64px;
+  background: linear-gradient(transparent, rgba(var(--orange-rgb), 0.5));
+}
+.transform-rail span:last-child {
+  transform: rotate(180deg);
+}
+.transform-rail svg {
+  width: 25px;
+  padding: 5px;
+  overflow: visible;
+  border: 1px solid rgba(var(--orange-rgb), 0.28);
+  border-radius: 50%;
+  background: rgba(var(--orange-rgb), 0.08);
+  fill: none;
+  stroke: var(--orange);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+}
+.playground-status {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.7rem 1.1rem;
+  border-top: 1px solid var(--stroke-soft);
+  background: #101720;
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+}
+.status-light {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--orange);
+  box-shadow: 0 0 10px rgba(var(--orange-rgb), 0.65);
+}
+.playground-status[data-state="success"] .status-light,
+.playground-status[data-state="ready"] .status-light { background: var(--lime); box-shadow: 0 0 10px rgba(var(--lime-rgb), 0.65); }
+.playground-status[data-state="error"] { color: var(--danger); }
+.playground-status[data-state="error"] .status-light { background: var(--danger); box-shadow: 0 0 10px rgba(255, 139, 145, 0.55); }
+.wasm-badge {
+  margin-left: auto;
+  padding: 0.24rem 0.5rem;
+  border: 1px solid var(--stroke);
+  border-radius: 5px;
+  color: var(--ink-muted);
+  font-size: 0.56rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}

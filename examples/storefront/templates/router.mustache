@@ -1,0 +1,22 @@
+  /// Declared on the supertype so navigation code can take a {{routerName}}
+  /// and still ask for its URL.
+  String get location;
+
+  /// Tries the routes in declaration order and takes the first whose shape
+  /// matches. `Result<Variant, …>` is a `Result<{{routerName}}, …>` — Dart's
+  /// generics are covariant, so no re-wrapping is generated.
+  static Result<{{routerName}}, RouteMismatch> match(Uri uri) =>
+      switch (uri.pathSegments) {
+{{#routes}}
+        {{{segmentPattern}}} => {{name}}.parse(uri),
+{{/routes}}
+        _ => Err(RouteMismatch('{{routerName}}', uri.toString())),
+      };
+
+  /// Every pattern this router knows, in order — useful for a sitemap, a test
+  /// that asserts coverage, or an error page that lists what does exist.
+  static const List<String> patterns = <String>[
+{{#routes}}
+    {{name}}.pattern,
+{{/routes}}
+  ];
