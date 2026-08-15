@@ -103,3 +103,4 @@ examples/dmx_sqlite_example/tool/dmx/app.db
 # "autoMemoryEnabled": false setting ([AGENT-AUTOMEMORY]). Claude Code auto-ignores
 # this file by default, so re-include it explicitly. Keep this LAST so it wins.
 !.claude/settings.local.json
+.mcp.json
