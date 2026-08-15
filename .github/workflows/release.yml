@@ -54,6 +54,30 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       publishing: ${{ github.event_name == 'push' }}
     steps:
+      # FIRST, before a checkout even. `publish` and `publish-pub` are held to
+      # the same gates but run in PARALLEL, so a Marketplace credential that
+      # turns out to be missing at publish time is discovered with pub.dev
+      # already published — and a pub version cannot be withdrawn, only
+      # retracted. The credentials are therefore proven to EXIST here, where the
+      # whole cost of being wrong is a red tag. Presence only: a value is never
+      # printed, compared, or logged.
+      - name: The publishing credentials exist
+        if: github.event_name == 'push'
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        run: |
+          set -euo pipefail
+          missing=""
+          [ -n "${AZURE_CLIENT_ID:-}" ] || missing="${missing} AZURE_CLIENT_ID"
+          [ -n "${AZURE_TENANT_ID:-}" ] || missing="${missing} AZURE_TENANT_ID"
+          if [ -n "${missing}" ]; then
+            echo "::error::Release refused: no value for${missing}. The Marketplace publish exchanges GitHub OIDC for an Entra session and cannot run without them, and pub.dev publishes alongside it — so releasing now would burn a pub.dev version with no extension beside it [release.authentication]."
+            exit 1
+          fi
+          echo "AZURE_CLIENT_ID: present"
+          echo "AZURE_TENANT_ID: present"
+
       - uses: actions/checkout@v4
         with:
           # The tagged commit, never a branch — `github.sha` on a tag push IS
