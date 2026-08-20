@@ -107,15 +107,41 @@ Every phase above is implemented, tested, and gated by `make ci`.
 | `src/dmx/src/macros/typediagram.rs` | The built-in macro, in the same registry `@dmx('model')` is in |
 | `src/dmx/src/hygiene.rs` | [hygiene] as a CST check, because a user template is nobody's reviewed code |
 | `src/dmx/tests/typediagram/corpus` | The `.td` fixtures and the oracle's model JSON |
+| `src/dmx/tests/typediagram/golden` | The same fixtures rendered to Dart through one shared template, committed and analyzer-gated |
 | `scripts/typediagram-oracle.mjs` | Development-only regeneration of that oracle from a typeDiagram checkout |
 | `examples/storefront/docs/shipping.dmx.md` | One definition, two generated Dart files, 9 tests over them |
 
+### [typediagram.delivery.corpus] Corpus → Dart
+
+The `.td` fixtures proved the *model* and nothing else: they were parsed,
+serialised, and compared against the oracle's JSON, and no Dart was ever
+produced from them. Against [emission] — emitting Dart that does not compile is
+the worst failure this repo has — model parity alone was not enough.
+
+Each fixture is now wrapped in a real `*.dmx.md` document over one shared
+template, run through the shipped binary, and committed as
+`tests/typediagram/golden/lib/<name>.dart`. `cargo test --test
+typediagram_golden` holds the bytes; `make corpus` runs `dart analyze
+--fatal-infos` over them. The definitions are never copied — the document is
+assembled from the `.td` file at test time, so the parity corpus stays the one
+place a definition is written.
+
+- [x] Every corpus fixture renders to Dart and the output is committed and byte-gated.
+- [x] `make corpus` analyzes it with `dart analyze --fatal-infos`.
+- [x] Tuple variants emit a name the target can compile. typeDiagram spells positional members `_0`, `_1`, … and the model keeps that spelling; Dart cannot, because a leading underscore makes the member private — illegal as a named constructor parameter and dead as a field. The context now maps them to `value1`, `value2`, … [context.discipline]. **Every tuple variant in the language previously emitted Dart that did not compile, and nothing in the repo could see it.**
+- [x] A signature carries `isOverload` so a target without overloading can name each one. `hasOverloads` on the declaration cannot be read from inside `{{#signatures}}`: a section entered on a name the *declaration* carries pushes that value with the declaration beneath it, so the ordinal read back is the declaration's.
+- [x] The shipped storefront template stopped using `{{genericDeclaration}}`, which HTML-escapes `<T>` into `&lt;T&gt;`. It only ever worked there because nothing in that document is generic.
+
 ### [typediagram.delivery.next] Not Yet Done
 
-- A second generation target. The abstraction is in place and carries one row; the value of the split is unproven until a second language uses it.
-- `dmx explain --stages` for documents: `explain` prints groups, dependencies, paths, and the exact context, but not the render → hygiene → validation stages [execution].
-- A persistent build cache. Outputs are compared whole, which is correct and re-renders more than a cache would.
-- Templates in a document cannot use partials; every bound fence is self-contained.
+- [ ] **Decide what `{{ }}` means for a code generator.** Mustache escapes it as HTML, which is never right for Dart: any value holding `<`, `>`, `&` or `"` — every generic type, every function type — silently becomes uncompilable. `{{{ }}}` is the documented way out and the built-in templates use it, but the default is a trap that fails at the analyzer rather than at the template. Either drop escaping for code targets (`jsoncontent.rs` `render_escaped`, plus the two tests that pin the current behaviour) or make an unescaped-by-default tag the documented norm.
+- [ ] **A rule for reading a parent's name inside a child section.** `isOverload` solves one instance of a general trap: any `{{#parentFlag}}…{{childName}}…{{/parentFlag}}` reads the parent's value. Either document the rule where template authors will meet it or push the flags every loop body needs onto the loop's own members.
+- [ ] **A second generation target.** The seam is in place and carries one row; the value of the split is unproven until a second language uses it. It is also what would force the questions the Dart-only path never asks: identifier casing per target, reserved words, and how positional members are named somewhere other than Dart.
+- [ ] **Reserved-word and identifier diagnostics.** A definition whose field is called `class` or `void` fails today at DMX4001 — "not valid Dart" with a line and column into generated source the author never wrote. It fails safe, which is the important half; it does not yet fail *legibly*, pointing at the definition.
+- [ ] **Prove `@targets` exclusion end to end.** `targeting.td` selects nothing away for `dart`, so the corpus shows the filter keeping declarations and never shows it dropping one. A fixture that excludes the target under test would.
+- [ ] **`dmx explain --stages` for documents.** `explain` prints groups, dependencies, paths, and the exact context, but not the render → hygiene → validation stages [execution].
+- [ ] **A persistent build cache.** Outputs are compared whole, which is correct and re-renders more than a cache would.
+- [ ] **Partials in document templates.** Every bound fence is self-contained, so two templates over one definition cannot share a fragment.
 
 ## [typediagram.delivery.acceptance] Acceptance Criteria
 

@@ -130,7 +130,9 @@ fn variants_carry_their_shape() {
         json!("{required this.radius}")
     );
     assert_eq!(variants[1]["isTuple"], json!(true));
-    assert_eq!(variants[1]["fields"][1]["name"], json!("_1"));
+    // The target name, not the model name — see
+    // `tuple_members_are_named_for_the_target_not_for_the_model`.
+    assert_eq!(variants[1]["fields"][1]["name"], json!("value2"));
     assert_eq!(variants[2]["isBare"], json!(true));
     assert_eq!(variants[2]["constructorParameters"], json!(""));
     assert_eq!(variants[0]["owner"], json!("Shape"));
@@ -185,4 +187,64 @@ fn targeting_removes_a_declaration_from_the_context() {
     assert_eq!(declarations[0]["name"], json!("Shown"));
     assert_eq!(declarations[0]["first"], json!(true));
     assert_eq!(declarations[0]["last"], json!(true));
+}
+
+/// [typediagram.model]: a tuple variant's positional members reach the target
+/// under a name the target can actually use.
+///
+/// The model keeps typeDiagram's own `_0`, `_1`, … spelling, and the parity
+/// corpus holds it there. Dart cannot: a leading underscore makes the member
+/// library-private, which is illegal as a named constructor parameter
+/// (`private_named_parameter_without_public_name`) and dead as a field. Before
+/// this, every tuple variant in the language emitted Dart that did not compile.
+#[test]
+fn tuple_members_are_named_for_the_target_not_for_the_model() {
+    let triple =
+        first("union RequestId { Triple(Int, String, List<Bool>) }")["variants"][0].clone();
+    assert_eq!(triple["isTuple"], json!(true));
+
+    let names: Vec<&str> = triple["fields"]
+        .as_array()
+        .expect("fields")
+        .iter()
+        .filter_map(|field| field["name"].as_str())
+        .collect();
+    assert_eq!(names, vec!["value1", "value2", "value3"]);
+
+    assert_eq!(
+        triple["constructorParameters"],
+        json!("{required this.value1, required this.value2, required this.value3}")
+    );
+    assert_eq!(triple["fields"][2]["dartType"], json!("List<bool>"));
+
+    // A named payload is untouched — the rename is for positional members only.
+    let circle = first("union Shape { Circle { radius: Float } }")["variants"][0].clone();
+    assert_eq!(circle["fields"][0]["name"], json!("radius"));
+    assert_eq!(
+        circle["constructorParameters"],
+        json!("{required this.radius}")
+    );
+}
+
+/// [typediagram.model]: a function says whether it has more than one signature,
+/// because a target without overloading has to name each one separately.
+#[test]
+fn a_function_reports_whether_it_is_overloaded() {
+    let single = first("function nothing() -> Unit");
+    assert_eq!(single["hasOverloads"], json!(false));
+    assert_eq!(
+        single["signatures"].as_array().expect("signatures").len(),
+        1
+    );
+
+    let many = first(
+        "function read {\n  (path: String) -> Bytes\n  async (path: String, timeout: Float) -> Bytes\n}",
+    );
+    assert_eq!(many["hasOverloads"], json!(true));
+    assert_eq!(many["signatures"][0]["isAsync"], json!(false));
+    assert_eq!(many["signatures"][1]["isAsync"], json!(true));
+    assert_eq!(
+        many["signatures"][1]["parameterList"],
+        json!("String path, double timeout")
+    );
 }

@@ -56,12 +56,12 @@ type Shipment {
 {{#isAlias}}
 
 /// `{{name}}` as the diagram declares it.
-typedef {{name}}{{genericDeclaration}} = {{{dartType}}};
+typedef {{name}}{{{genericDeclaration}}} = {{{dartType}}};
 {{/isAlias}}
 {{#isRecord}}
 
 /// {{label}}, generated from the shipping diagram.
-final class {{name}}{{genericDeclaration}} {
+final class {{name}}{{{genericDeclaration}}} {
   /// Every field of {{label}}, in the order the diagram declares them.
   const {{name}}({{{constructorParameters}}});
 {{#fields}}
@@ -74,14 +74,14 @@ final class {{name}}{{genericDeclaration}} {
 {{#isUnion}}
 
 /// {{label}} — exactly one of the variants below.
-sealed class {{name}}{{genericDeclaration}} {
+sealed class {{name}}{{{genericDeclaration}}} {
   /// The shared constructor every variant delegates to.
   const {{name}}();
 }
 {{#variants}}
 
 /// The `{{name}}` case of {{owner}}.
-final class {{name}} extends {{owner}}{{ownerGenericDeclaration}} {
+final class {{name}} extends {{owner}}{{{ownerGenericDeclaration}}} {
   /// Every field of this case, in diagram order.
   const {{name}}({{{constructorParameters}}}) : super();
 {{#fields}}

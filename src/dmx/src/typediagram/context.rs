@@ -116,11 +116,13 @@ fn declaration(decl: &Decl, model: &Model, target: &Target) -> Result<Map<String
             put(&mut out, "target", typed.value);
         }
         Decl::Function(function) => {
+            let overloaded = function.signatures.len() > 1;
             let signatures = function
                 .signatures
                 .iter()
-                .map(|signature| self::signature(signature, model, target))
+                .map(|signature| self::signature(signature, overloaded, model, target))
                 .collect::<Result<Vec<_>>>()?;
+            put(&mut out, "hasOverloads", overloaded);
             put(&mut out, "signatures", positioned(signatures));
         }
     }
@@ -169,10 +171,24 @@ fn variant(
 }
 
 /// One overload signature.
-fn signature(signature: &Signature, model: &Model, target: &Target) -> Result<Map<String, Value>> {
+///
+/// `overloaded` is repeated here from the declaration on purpose. A Mustache
+/// section entered on a name the *declaration* carries pushes that value with
+/// the declaration beneath it, so `{{#hasOverloads}}{{index}}{{/hasOverloads}}`
+/// inside `{{#signatures}}` reads the declaration's ordinal, not the
+/// signature's. A flag the signature carries itself keeps the signature under
+/// the section, which is the difference between `Read0`/`Read1` and two
+/// typedefs called `Read0` [typediagram.model].
+fn signature(
+    signature: &Signature,
+    overloaded: bool,
+    model: &Model,
+    target: &Target,
+) -> Result<Map<String, Value>> {
     let mut out = Map::new();
     let params = fields(&signature.params, model, target)?;
     let returns = type_ref(&signature.returns, model, target)?;
+    put(&mut out, "isOverload", overloaded);
     put(&mut out, "isAsync", signature.is_async);
     put(&mut out, "hasParams", !signature.params.is_empty());
     put(&mut out, "parameterList", parameter_list(&params));
@@ -201,22 +217,36 @@ fn members(
     Ok(())
 }
 
+/// The name generated code uses for one member [context.discipline].
+///
+/// typeDiagram spells a tuple variant's positional members `_0`, `_1`, … and
+/// the model keeps that spelling, because upstream does and the parity corpus
+/// holds it there. Generated code cannot keep it: a leading underscore makes
+/// the member private in Dart, which is illegal as a named constructor
+/// parameter and dead as a field. Positional members are therefore `value1`,
+/// `value2`, … — a proper name [context.discipline], one-based the way every
+/// language spells the first element of a tuple. Every other member keeps the
+/// name its author wrote.
+fn member_name(raw: &str) -> String {
+    match raw.strip_prefix('_').map(str::parse::<usize>) {
+        Some(Ok(position)) => format!("value{}", position.saturating_add(1)),
+        Some(Err(_)) | None => raw.to_owned(),
+    }
+}
+
 /// A field list — a record's, a variant's payload, or a signature's parameters.
 fn fields(fields: &[Field], model: &Model, target: &Target) -> Result<Vec<Map<String, Value>>> {
     fields
         .iter()
         .map(|field| {
-            let mut out = named(&field.name);
+            let name = member_name(&field.name);
+            let mut out = named(&name);
             let typed = type_ref(&field.ty, model, target)?;
             typed.place_into(&mut out);
             put(&mut out, "typeDiagram", field.ty.canonical());
             put(&mut out, "isOptional", typed.optional);
             put(&mut out, "isRequired", !typed.optional);
-            put(
-                &mut out,
-                "parameter",
-                parameter(&field.name, typed.optional),
-            );
+            put(&mut out, "parameter", parameter(&name, typed.optional));
             put(&mut out, "type", typed.value);
             Ok(out)
         })

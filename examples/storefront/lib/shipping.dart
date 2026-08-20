@@ -1,5 +1,5 @@
 // dmx: generated from docs/shipping.dmx.md — do not edit.
-// dmx: group 1, fences 1/2, definition bd16c86d530f3daa, template 861e8207f9496f03, context v1, dmx 0.0.0.
+// dmx: group 1, fences 1/2, definition bd16c86d530f3daa, template f826dd2e54c4c785, context v1, dmx 0.0.0.
 
 // Generated from docs/shipping.dmx.md. Edit the diagram, not this file.
 

@@ -148,7 +148,32 @@ template selects a shape rather than filtering a list.
 | `isOptional`, `isRequired`, `parameter` | fields | Whether it is an `Option`, and its constructor fragment |
 | `owner`, `ownerGenericDeclaration` | variants | The union the variant belongs to, which its own `name` would otherwise hide |
 | `discriminant`, `hasDiscriminant`, `isTuple`, `isBare` | variants | The variant's shape |
+| `untagged` | unions | Whether the cases are told apart by shape rather than a tag |
+| `signatures`, `hasOverloads` | functions | Every overload, and whether there is more than one |
+| `parameterList`, `returnType`, `isAsync`, `params`, `isOverload` | signatures | One signature, ready to place |
 | `first`, `last`, `comma`, `index` | every list member | Separators without arithmetic |
+
+A tuple variant's positional members arrive as `value1`, `value2`, … The
+diagram spells them `_0`, `_1`, and the model keeps that spelling, but a
+leading underscore is private in Dart — illegal as a named constructor
+parameter and dead as a field — so the target sees a name it can compile.
+
+## Two things worth knowing before you write a template
+
+{% raw %}
+**Use `{{{triple}}}` braces for anything holding a type.** `{{name}}` escapes
+its value as HTML, so `{{genericDeclaration}}` renders `<T>` as `&lt;T&gt;` and
+the file fails validation rather than being written. Every value that can hold
+`<`, `>` or `&` — `dartType`, `targetType`, `genericDeclaration`,
+`ownerGenericDeclaration`, `parameterList`, `returnType`,
+`constructorParameters` — wants triple braces.
+
+**A section reads names from the level it was entered on.** Opening
+`{{#hasOverloads}}` inside `{{#signatures}}` finds `hasOverloads` on the
+*function*, so `{{index}}` inside that section is the function's ordinal, not
+the signature's. That is why a signature carries its own `isOverload`: entering
+the section on the signature's own name keeps the signature in scope.
+{% endraw %}
 
 ## Where the definitions come from
 

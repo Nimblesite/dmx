@@ -18,6 +18,7 @@ EXAMPLE_DIR := examples/storefront
 CORPUS_DIR := $(TARGET_DIR)/corpus
 DMX_PACKAGE_DIR := src/dart_packages/dmx
 GOLDEN_DIR := $(CRATE_DIR)/tests/golden
+TD_GOLDEN_DIR := $(CRATE_DIR)/tests/typediagram/golden
 
 # Every Dart directory a human writes. Deliberately enumerated rather than
 # globbed: what is NOT here is dmx output, and formatting output rewrites the
@@ -126,7 +127,8 @@ lint: ## Clippy with warnings denied (read-only — never formats)
 fmt: ## Format code in-place. Pass CHECK=1 for read-only check (CI use)
 	cargo fmt $(CRATE) --all$(if $(CHECK), --check,)
 	@# Only HAND-WRITTEN Dart is formatted. `examples/storefront/lib`,
-	@# `examples/dmx_sqlite_example/lib` and $(GOLDEN_DIR) hold dmx OUTPUT —
+	@# `examples/dmx_sqlite_example/lib`, $(GOLDEN_DIR) and
+	@# $(TD_GOLDEN_DIR)/lib hold dmx OUTPUT —
 	@# formatting them would rewrite the very bytes the golden tests assert on.
 	@# `--output none` matters: plain `dart format --set-exit-if-changed` still
 	@# REWRITES the files it checks, which is not a check.
@@ -134,7 +136,7 @@ fmt: ## Format code in-place. Pass CHECK=1 for read-only check (CI use)
 
 clean: ## Remove Rust and Dart build artifacts
 	cargo clean $(CRATE)
-	$(RM) $(EXAMPLE_DIR)/.dart_tool $(CORPUS_DIR) $(WEBSITE_DIR)/dist $(WEBSITE_DIR)/pkg lcov.info
+	$(RM) $(EXAMPLE_DIR)/.dart_tool $(TD_GOLDEN_DIR)/.dart_tool $(CORPUS_DIR) $(WEBSITE_DIR)/dist $(WEBSITE_DIR)/pkg lcov.info
 	@# One per component, plus the raw hit data the two of them are formatted from.
 	$(RM) $(DMX_PACKAGE_DIR)/lcov.info $(DMX_PACKAGE_DIR)/.coverage \
 		$(EXTENSION_DIR)/lcov.info $(WEBSITE_DIR)/lcov.info $(WEBSITE_DIR)/.coverage
@@ -463,3 +465,10 @@ corpus: ## Generate every golden sample and prove it is valid Dart
 	@printf 'name: dmx_corpus\nenvironment:\n  sdk: ^3.0.0\ndependencies:\n  dmx: ^0.3.0\n' > $(CORPUS_DIR)/pubspec.yaml
 	cargo run $(CRATE) --quiet -- build $(CORPUS_DIR)/lib --insert-regions
 	cd $(CORPUS_DIR) && dart pub get && dart analyze --fatal-infos
+	@# The typeDiagram corpus is generated the other way round: no annotated
+	@# Dart at all, just `tests/typediagram/corpus/*.td` rendered through
+	@# `tests/typediagram/golden/template.mustache`. `cargo test --test
+	@# typediagram_golden` proves the committed files are what the binary
+	@# writes; this proves they are Dart the analyzer accepts, which is the
+	@# half a byte comparison cannot do.
+	cd $(TD_GOLDEN_DIR) && dart pub get && dart analyze --fatal-infos
