@@ -1,0 +1,172 @@
+{
+  "version": 1,
+  "decls": [
+    {
+      "kind": "record",
+      "name": "Scalars",
+      "generics": [],
+      "fields": [
+        {
+          "name": "flag",
+          "type": {
+            "name": "Bool",
+            "args": []
+          }
+        },
+        {
+          "name": "count",
+          "type": {
+            "name": "Int",
+            "args": []
+          }
+        },
+        {
+          "name": "ratio",
+          "type": {
+            "name": "Float",
+            "args": []
+          }
+        },
+        {
+          "name": "text",
+          "type": {
+            "name": "String",
+            "args": []
+          }
+        },
+        {
+          "name": "blob",
+          "type": {
+            "name": "Bytes",
+            "args": []
+          }
+        },
+        {
+          "name": "nothing",
+          "type": {
+            "name": "Unit",
+            "args": []
+          }
+        },
+        {
+          "name": "at",
+          "type": {
+            "name": "DateTime",
+            "args": []
+          }
+        },
+        {
+          "name": "id",
+          "type": {
+            "name": "Uuid",
+            "args": []
+          }
+        },
+        {
+          "name": "amount",
+          "type": {
+            "name": "Decimal",
+            "args": []
+          }
+        },
+        {
+          "name": "tags",
+          "type": {
+            "name": "List",
+            "args": [
+              {
+                "name": "String",
+                "args": []
+              }
+            ]
+          }
+        },
+        {
+          "name": "index",
+          "type": {
+            "name": "Map",
+            "args": [
+              {
+                "name": "String",
+                "args": []
+              },
+              {
+                "name": "List",
+                "args": [
+                  {
+                    "name": "Option",
+                    "args": [
+                      {
+                        "name": "Decimal",
+                        "args": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "maybe",
+          "type": {
+            "name": "Option",
+            "args": [
+              {
+                "name": "Int",
+                "args": []
+              }
+            ]
+          }
+        },
+        {
+          "name": "anything",
+          "type": {
+            "name": "Any",
+            "args": []
+          }
+        },
+        {
+          "name": "deep",
+          "type": {
+            "name": "Option",
+            "args": [
+              {
+                "name": "Option",
+                "args": [
+                  {
+                    "name": "Map",
+                    "args": [
+                      {
+                        "name": "Uuid",
+                        "args": []
+                      },
+                      {
+                        "name": "List",
+                        "args": [
+                          {
+                            "name": "Any",
+                            "args": []
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "kind": "alias",
+      "name": "Uuid",
+      "generics": [],
+      "target": {
+        "name": "String",
+        "args": []
+      }
+    }
+  ]
+}

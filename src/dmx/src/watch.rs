@@ -35,9 +35,9 @@ impl Scope {
             .with_context(|| format!("DMX1002 [cli]: cannot watch {}", path.display()))?;
         match (absolute.is_dir(), absolute.is_file()) {
             (true, false) => Ok(Self::Directory(absolute)),
-            (false, true) if is_dart_source(&absolute) => Ok(Self::File(absolute)),
+            (false, true) if Sweep::Sources.wants_named(&absolute) => Ok(Self::File(absolute)),
             (false, true) => bail!(
-                "DMX1002 [cli]: watch target is not a Dart source: {}",
+                "DMX1002 [cli]: watch target is not a Dart source or a Markdown document: {}",
                 path.display()
             ),
             _ => bail!(
@@ -62,7 +62,15 @@ impl Scope {
 
     /// Whether an event about this path is one this scope wants.
     fn accepts(&self, path: &Path) -> bool {
-        !path.is_symlink() && path.is_file() && is_dart_source(path) && self.contains(path)
+        let named = matches!(self, Self::File(file) if file == path);
+        // Recursive discovery takes `*.dmx.md`; a Markdown file named directly
+        // is watched whatever it is called [typediagram.documents].
+        let wanted = if named {
+            Sweep::Sources.wants_named(path)
+        } else {
+            Sweep::Sources.wants(path)
+        };
+        !path.is_symlink() && path.is_file() && wanted && self.contains(path)
     }
 
     /// Whether `path` is a directory inside this scope's tree.
@@ -103,15 +111,62 @@ impl Scope {
     }
 }
 
-/// Finds source files using the zero-config exclusions [surface.zero-config].
+/// What one sweep of the tree is looking for.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Sweep {
+    /// Everything dmx generates from: Dart files and Markdown documents.
+    Sources,
+    /// Anything carrying an extension some generation target writes — the
+    /// candidates a generated output could be hiding among when a pass
+    /// collects what it no longer produces [typediagram.output].
+    Outputs,
+}
+
+impl Sweep {
+    /// Whether a file *recursive discovery* found is one this sweep wants.
+    fn wants(self, path: &Path) -> bool {
+        match self {
+            Self::Sources => is_dart_source(path) || crate::typediagram::is_document(path),
+            Self::Outputs => crate::typediagram::target::extensions()
+                .any(|extension| has_extension(path, extension)),
+        }
+    }
+
+    /// Whether a file *named directly* is one this sweep wants.
+    ///
+    /// The two differ in exactly one place: recursive discovery takes
+    /// `*.dmx.md` and nothing else, and naming a Markdown file is how any
+    /// other one is generated from [typediagram.documents].
+    fn wants_named(self, path: &Path) -> bool {
+        self.wants(path) || (self == Self::Sources && crate::typediagram::is_markdown(path))
+    }
+}
+
+/// Every source dmx generates from at or under `paths` — Dart files and
+/// Markdown documents alike [surface.zero-config], [typediagram.documents].
 ///
 /// # Errors
 ///
 /// Fails when a directory cannot be read.
-pub fn collect_dart_files(paths: &[PathBuf]) -> Result<Vec<PathBuf>> {
+pub fn collect_sources(paths: &[PathBuf]) -> Result<Vec<PathBuf>> {
+    collect(paths, Sweep::Sources)
+}
+
+/// Every file at or under `paths` that some generation target could have
+/// written [typediagram.output].
+///
+/// # Errors
+///
+/// Fails when a directory cannot be read.
+pub fn collect_outputs(paths: &[PathBuf]) -> Result<Vec<PathBuf>> {
+    collect(paths, Sweep::Outputs)
+}
+
+/// Every file `sweep` accepts at or under `paths`, deduplicated and ordered.
+fn collect(paths: &[PathBuf], sweep: Sweep) -> Result<Vec<PathBuf>> {
     paths
         .iter()
-        .map(|path| collect_path(path))
+        .map(|path| collect_path(path, sweep, Sweep::wants_named))
         .collect::<Result<Vec<_>>>()
         .map(|groups| {
             groups
@@ -123,23 +178,25 @@ pub fn collect_dart_files(paths: &[PathBuf]) -> Result<Vec<PathBuf>> {
         })
 }
 
-/// Every source at or under one path.
-fn collect_path(path: &Path) -> Result<Vec<PathBuf>> {
-    match (
-        path.is_symlink(),
-        path.is_dir(),
-        path.is_file() && is_dart_source(path),
-    ) {
-        (false, true, _) => collect_directory(path),
-        (false, false, true) => Ok(vec![path.to_owned()]),
+/// Every source at or under one path, with `accept` deciding what a *file*
+/// there has to be — which differs between a path somebody named and one
+/// discovery walked into.
+fn collect_path(
+    path: &Path,
+    sweep: Sweep,
+    accept: fn(Sweep, &Path) -> bool,
+) -> Result<Vec<PathBuf>> {
+    match (path.is_symlink(), path.is_dir(), path.is_file()) {
+        (false, true, _) => collect_directory(path, sweep),
+        (false, false, true) if accept(sweep, path) => Ok(vec![path.to_owned()]),
         // A symlink is never followed [surface.zero-config], and anything that
-        // is not a Dart source is not dmx's to read.
+        // is not a source is not dmx's to read.
         _ => Ok(Vec::new()),
     }
 }
 
 /// Every source under one directory, hidden entries excluded.
-fn collect_directory(directory: &Path) -> Result<Vec<PathBuf>> {
+fn collect_directory(directory: &Path, sweep: Sweep) -> Result<Vec<PathBuf>> {
     std::fs::read_dir(directory)
         .with_context(|| {
             format!(
@@ -148,7 +205,9 @@ fn collect_directory(directory: &Path) -> Result<Vec<PathBuf>> {
             )
         })?
         .filter_map(|entry| match entry {
-            Ok(entry) if visible_name(&entry.file_name()) => Some(collect_path(&entry.path())),
+            Ok(entry) if visible_name(&entry.file_name()) => {
+                Some(collect_path(&entry.path(), sweep, Sweep::wants))
+            }
             Ok(_) => None,
             Err(error) => Some(Err(anyhow::Error::from(error).context(format!(
                 "DMX1002 [surface.zero-config]: cannot inspect {}",
@@ -161,11 +220,16 @@ fn collect_directory(directory: &Path) -> Result<Vec<PathBuf>> {
 
 /// A Dart source dmx owns — not a `.g.dart` somebody else generates.
 fn is_dart_source(path: &Path) -> bool {
-    path.extension()
-        .is_some_and(|extension| extension == "dart")
+    has_extension(path, "dart")
         && path
             .file_name()
             .is_some_and(|name| !name.to_string_lossy().ends_with(".g.dart"))
+}
+
+/// Whether `path` carries `extension`, however it is cased.
+fn has_extension(path: &Path, extension: &str) -> bool {
+    path.extension()
+        .is_some_and(|found| found.eq_ignore_ascii_case(extension))
 }
 
 /// Whether a directory entry is one the zero-config rules look at.
@@ -307,7 +371,7 @@ impl Batch {
         self.trees
             .iter()
             .filter(|path| path.exists())
-            .map(|path| collect_path(path))
+            .map(|path| collect_path(path, Sweep::Sources, Sweep::wants))
             .collect::<Result<Vec<_>>>()
             .map(|groups| {
                 groups
@@ -447,9 +511,12 @@ fn claim(path: &Path, scopes: &[Scope]) -> Batch {
     }
 }
 
-/// A missing Dart source against the watched directory it was in.
+/// A missing source against the watched directory it was in.
 fn vanished_in(path: &Path, scopes: &[Scope]) -> Option<(PathBuf, PathBuf)> {
-    let parent = is_dart_source(path).then(|| path.parent()).flatten()?;
+    let parent = Sweep::Sources
+        .wants(path)
+        .then(|| path.parent())
+        .flatten()?;
     scopes
         .iter()
         .any(|scope| scope.covers_directory(parent))

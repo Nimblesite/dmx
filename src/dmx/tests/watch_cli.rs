@@ -94,9 +94,29 @@ impl WatchProcess {
     }
 
     fn spawn(path: &Path) -> io::Result<Self> {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_dmx"))
-            .arg("watch")
-            .arg(path)
+        Self::spawn_args(None, &[path.as_os_str()])
+    }
+
+    /// A watcher started *inside* `directory`, watching the relative paths
+    /// `args` names.
+    ///
+    /// A Markdown document's outputs are workspace-relative
+    /// [typediagram.output], so where the watcher runs is part of what it does
+    /// — which is the one thing `spawn` cannot express.
+    fn spawn_ready_in(directory: &Path, args: &[&str]) -> io::Result<Self> {
+        let owned: Vec<&std::ffi::OsStr> = args.iter().map(std::ffi::OsStr::new).collect();
+        let mut watcher = Self::spawn_args(Some(directory), &owned)?;
+        watcher.wait_until_ready(args.len())?;
+        Ok(watcher)
+    }
+
+    fn spawn_args(directory: Option<&Path>, args: &[&std::ffi::OsStr]) -> io::Result<Self> {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_dmx"));
+        let _ = command.arg("watch").args(args);
+        if let Some(directory) = directory {
+            let _ = command.current_dir(directory);
+        }
+        let mut child = command
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()?;
@@ -121,6 +141,22 @@ impl WatchProcess {
     fn wait_until_ready(&mut self, root_count: usize) -> io::Result<()> {
         let expected = format!("stdout: dmx: watching {root_count} path(s)");
         self.wait_for_log(READY_TIMEOUT, |line| line == expected, &expected)
+    }
+
+    /// Waits for a line on `stream` carrying `needle`.
+    ///
+    /// The exact-match waiters below spell out a whole line because a Dart
+    /// source's write line is one path and nothing else. A document is named
+    /// by both its write line and its diagnostics, so what identifies which
+    /// one arrived is the stream it arrived on.
+    fn wait_for_line_on(&mut self, stream: &str, needle: &str) -> io::Result<()> {
+        let prefix = stream.to_owned();
+        let expected = format!("{stream}…{needle}");
+        self.wait_for_log(
+            REGENERATION_TIMEOUT,
+            move |line| line.starts_with(&prefix) && line.contains(needle),
+            &expected,
+        )
     }
 
     fn wait_for_write(&mut self, path: &Path) -> io::Result<()> {
@@ -884,19 +920,22 @@ fn watch_rejects_a_missing_root() -> io::Result<()> {
     Ok(())
 }
 
-/// Verifies explicit watch targets obey source inclusion [surface.zero-config] and [cli].
+/// Verifies explicit watch targets obey source inclusion [surface.zero-config],
+/// [typediagram.documents] and [cli].
 #[test]
-fn watch_rejects_an_explicit_non_dart_file_without_reporting_readiness() -> io::Result<()> {
+fn watch_rejects_an_explicit_unsupported_file_without_reporting_readiness() -> io::Result<()> {
     let directory = TempDirectory::create("dmx-watch-cli")?;
-    let non_dart = directory.path.join("notes.txt");
-    fs::write(&non_dart, "not Dart\n")?;
-    let output = run_watch_target_to_exit(&non_dart)?;
+    let unsupported = directory.path.join("notes.txt");
+    fs::write(&unsupported, "not a source\n")?;
+    let output = run_watch_target_to_exit(&unsupported)?;
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = failed_stderr(&output, &non_dart, "non-Dart target was accepted");
+    let stderr = failed_stderr(&output, &unsupported, "unsupported target was accepted");
 
     assert!(stdout.is_empty(), "unexpected stdout:\n{stdout}");
     assert!(
-        stderr.starts_with("error: DMX1002 [cli]: watch target is not a Dart source:"),
+        stderr.starts_with(
+            "error: DMX1002 [cli]: watch target is not a Dart source or a Markdown document:"
+        ),
         "unexpected stderr:\n{stderr}"
     );
     assert!(
@@ -971,6 +1010,145 @@ fn watch_regenerates_a_region_gutted_twice_in_a_row() -> io::Result<()> {
         fixture.watcher.is_running()?,
         "watcher stopped after repeated repairs:\n{}",
         fixture.watcher.output()
+    );
+    Ok(())
+}
+
+/// The document every typeDiagram watch test starts from.
+const DOCUMENT: &str = r#"# Shipping
+
+```typeDiagram
+type Parcel {
+  id:      Uuid
+  weightG: Int
+}
+```
+
+```mustache {"dmx":{"output":"lib/parcel.dart"}}
+{{#declarations}}
+final class {{name}} {
+  const {{name}}({{{constructorParameters}}});
+{{#fields}}
+
+  final {{{dartType}}} {{name}};
+{{/fields}}
+}
+{{/declarations}}
+```
+"#;
+
+/// A workspace holding one `*.dmx.md` document, watched from inside it.
+struct WatchedDocument {
+    directory: TempDirectory,
+    watcher: WatchProcess,
+}
+
+impl WatchedDocument {
+    fn create() -> io::Result<Self> {
+        let directory = TempDirectory::create("dmx-watch-typediagram")?;
+        let _ = directory.write("docs/shipping.dmx.md", DOCUMENT)?;
+        fs::create_dir_all(directory.at("lib"))?;
+        let watcher = WatchProcess::spawn_ready_in(&directory.path, &["docs", "lib"])?;
+        Ok(Self { directory, watcher })
+    }
+
+    /// The generated output, which the first pass has already written.
+    fn output(&self) -> io::Result<String> {
+        fs::read_to_string(self.directory.at("lib/parcel.dart"))
+    }
+
+    /// Replaces the document, which is what a save is.
+    fn save(&self, document: &str) -> io::Result<()> {
+        let _ = self.directory.write("docs/shipping.dmx.md", document)?;
+        Ok(())
+    }
+}
+
+/// [typediagram.execution]: the first pass generates the document's outputs
+/// before the watcher reports readiness, and a saved definition regenerates
+/// them.
+#[test]
+fn watch_generates_a_document_and_regenerates_it_on_save() -> io::Result<()> {
+    let mut fixture = WatchedDocument::create()?;
+    let first = fixture.output()?;
+    assert!(first.contains("final class Parcel {"), "{first}");
+    assert!(first.contains("final int weightG;"), "{first}");
+
+    fixture.save(&DOCUMENT.replace("weightG: Int", "weightG: Float"))?;
+    fixture
+        .watcher
+        .wait_for_line_on("stdout: wrote: ", "shipping.dmx.md")?;
+
+    let second = fixture.output()?;
+    assert!(second.contains("final double weightG;"), "{second}");
+    assert!(
+        fixture.watcher.is_running()?,
+        "watcher stopped after a document save:\n{}",
+        fixture.watcher.output()
+    );
+    Ok(())
+}
+
+/// [typediagram.execution]: an invalid save keeps the last valid output, and
+/// the next valid save recovers — without the watcher exiting.
+#[test]
+fn watch_retains_the_last_valid_output_and_recovers() -> io::Result<()> {
+    let mut fixture = WatchedDocument::create()?;
+    let valid = fixture.output()?;
+
+    fixture.save(&DOCUMENT.replace("weightG: Int", "weightG:"))?;
+    fixture.watcher.wait_for_line_on("stderr: ", "DMX8004")?;
+    assert_eq!(
+        fixture.output()?,
+        valid,
+        "an invalid definition must leave the last valid output alone"
+    );
+
+    fixture.save(&DOCUMENT.replace("weightG: Int", "weightG: Bool"))?;
+    fixture
+        .watcher
+        .wait_for_line_on("stdout: wrote: ", "shipping.dmx.md")?;
+    let recovered = fixture.output()?;
+    assert!(recovered.contains("final bool weightG;"), "{recovered}");
+    assert!(
+        fixture.watcher.is_running()?,
+        "watcher stopped after recovery"
+    );
+    Ok(())
+}
+
+/// [typediagram.execution]: prose outside a generation group is not a
+/// dependency, so saving it regenerates nothing.
+#[test]
+fn watch_ignores_a_change_to_prose_outside_a_group() -> io::Result<()> {
+    let mut fixture = WatchedDocument::create()?;
+    let before = fixture.output()?;
+    // The first pass has already written once, so what a prose-only save must
+    // not do is write AGAIN.
+    let writes = fixture.watcher.writes().len();
+
+    fixture.save(&format!("{DOCUMENT}\nA paragraph somebody added.\n"))?;
+    fixture.watcher.observe_for(QUIET_PERIOD);
+
+    assert_eq!(fixture.output()?, before, "prose is not a dependency");
+    assert_eq!(
+        fixture.watcher.writes().len(),
+        writes,
+        "a prose-only save regenerated:\n{}",
+        fixture.watcher.output()
+    );
+    assert!(
+        !fixture
+            .watcher
+            .observed
+            .iter()
+            .any(|line| line.starts_with("stderr: ")),
+        "a prose-only save produced an error:\n{}",
+        fixture.watcher.output()
+    );
+    assert!(
+        fixture.watcher.is_running()?,
+        "watcher stopped after a prose-only save"
     );
     Ok(())
 }

@@ -52,22 +52,27 @@ pub fn render<C: Content>(template: &str, ctx: &C) -> Result<String> {
     })
 }
 
-/// Renders `template` against a model a macro worker computed
+/// Renders `template` against a model computed outside this crate
 /// [dartmacros.render].
 ///
 /// This is [`render`] with the context supplied as JSON instead of as a Rust
-/// struct, so a macro written in Dart reaches the very engine, standalone-tag
+/// struct, so a macro written in Dart — or a Mustache fence in a Markdown
+/// document [typediagram.templates] — reaches the very engine, standalone-tag
 /// handling, and normalizer the catalogue's own templates go through. The
 /// playground's template override deliberately does not apply: it replaces one
-/// inferred built-in's template [playground.wasm], and a project's macro
-/// brought its own.
+/// inferred built-in's template [playground.wasm], and these callers brought
+/// their own.
+///
+/// The failure is deliberately uncoded: a template that does not compile means
+/// something different to each caller — a worker's bug, an author's typo — so
+/// each adds its own diagnostic around this one.
 ///
 /// # Errors
 ///
-/// Fails when `template` does not compile, naming the template the macro sent.
-pub fn render_json(name: &str, template: &str, model: &Value) -> Result<String> {
-    let compiled = Template::new(strip_standalone(template))
-        .with_context(|| format!("DMX7009: macro template `{name}` does not compile"))?;
+/// Fails when `template` does not compile.
+pub fn render_json(template: &str, model: &Value) -> Result<String> {
+    let compiled =
+        Template::new(strip_standalone(template)).context("the template is not valid Mustache")?;
     Ok(normalize(&compiled.render(&Json(model))))
 }
 

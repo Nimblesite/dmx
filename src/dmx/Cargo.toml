@@ -20,6 +20,10 @@ crate-type = ["cdylib", "rlib"]
 anyhow = "1.0.104"
 blake3 = "1.8.6"
 ramhorns = "1.0.1"
+# CommonMark, for the typeDiagram Markdown front end [typediagram.documents]: a
+# fence is an AST node, never a pattern match over the document text. Default
+# features off — dmx reads the event stream and never renders HTML.
+pulldown-cmark = { version = "0.13.4", default-features = false }
 # Common, NOT wasm-excluded: `render` is the pipeline's render stage and
 # `jsoncontent` is the model it renders, and the playground compiles both —
 # [playground.wasm] requires the WASM exports to call the same pipeline as

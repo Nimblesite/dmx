@@ -1,0 +1,258 @@
+{
+  "version": 1,
+  "decls": [
+    {
+      "kind": "union",
+      "name": "Shape",
+      "generics": [],
+      "variants": [
+        {
+          "name": "Circle",
+          "fields": [
+            {
+              "name": "radius",
+              "type": {
+                "name": "Float",
+                "args": []
+              }
+            }
+          ]
+        },
+        {
+          "name": "Rectangle",
+          "fields": [
+            {
+              "name": "width",
+              "type": {
+                "name": "Float",
+                "args": []
+              }
+            },
+            {
+              "name": "height",
+              "type": {
+                "name": "Float",
+                "args": []
+              }
+            }
+          ]
+        },
+        {
+          "name": "Triangle",
+          "fields": [
+            {
+              "name": "a",
+              "type": {
+                "name": "Float",
+                "args": []
+              }
+            },
+            {
+              "name": "b",
+              "type": {
+                "name": "Float",
+                "args": []
+              }
+            },
+            {
+              "name": "c",
+              "type": {
+                "name": "Float",
+                "args": []
+              }
+            }
+          ]
+        },
+        {
+          "name": "Point",
+          "fields": []
+        }
+      ]
+    },
+    {
+      "kind": "union",
+      "name": "ErrorCode",
+      "generics": [],
+      "variants": [
+        {
+          "name": "ParseError",
+          "fields": [],
+          "discriminant": "-32700"
+        },
+        {
+          "name": "InvalidRequest",
+          "fields": [],
+          "discriminant": "-32600"
+        },
+        {
+          "name": "MethodNotFound",
+          "fields": [],
+          "discriminant": "-32601"
+        },
+        {
+          "name": "Ok",
+          "fields": [],
+          "discriminant": "0"
+        },
+        {
+          "name": "Grouped",
+          "fields": [],
+          "discriminant": "1_000"
+        }
+      ]
+    },
+    {
+      "kind": "union",
+      "name": "Option",
+      "generics": [
+        "T"
+      ],
+      "variants": [
+        {
+          "name": "Some",
+          "fields": [
+            {
+              "name": "value",
+              "type": {
+                "name": "T",
+                "args": []
+              }
+            }
+          ]
+        },
+        {
+          "name": "None",
+          "fields": []
+        }
+      ]
+    },
+    {
+      "kind": "union",
+      "name": "Result",
+      "generics": [
+        "T",
+        "E"
+      ],
+      "variants": [
+        {
+          "name": "Ok",
+          "fields": [
+            {
+              "name": "value",
+              "type": {
+                "name": "T",
+                "args": []
+              }
+            }
+          ]
+        },
+        {
+          "name": "Err",
+          "fields": [
+            {
+              "name": "error",
+              "type": {
+                "name": "E",
+                "args": []
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "union",
+      "name": "RequestId",
+      "generics": [],
+      "variants": [
+        {
+          "name": "Number",
+          "fields": [
+            {
+              "name": "_0",
+              "type": {
+                "name": "Int",
+                "args": []
+              }
+            }
+          ]
+        },
+        {
+          "name": "String",
+          "fields": [
+            {
+              "name": "_0",
+              "type": {
+                "name": "String",
+                "args": []
+              }
+            }
+          ]
+        },
+        {
+          "name": "Triple",
+          "fields": [
+            {
+              "name": "_0",
+              "type": {
+                "name": "Int",
+                "args": []
+              }
+            },
+            {
+              "name": "_1",
+              "type": {
+                "name": "String",
+                "args": []
+              }
+            },
+            {
+              "name": "_2",
+              "type": {
+                "name": "List",
+                "args": [
+                  {
+                    "name": "Bool",
+                    "args": []
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "union",
+      "name": "Loose",
+      "generics": [],
+      "untagged": true,
+      "variants": [
+        {
+          "name": "Left",
+          "fields": [
+            {
+              "name": "value",
+              "type": {
+                "name": "Int",
+                "args": []
+              }
+            }
+          ]
+        },
+        {
+          "name": "Right",
+          "fields": [
+            {
+              "name": "value",
+              "type": {
+                "name": "String",
+                "args": []
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

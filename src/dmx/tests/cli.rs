@@ -58,7 +58,13 @@ fn help_describes_every_subcommand_and_succeeds() {
         let output = dmx(&[flag]);
         assert!(output.status.success(), "`dmx {flag}` failed");
         let text = stdout(&output);
-        for expected in ["dmx build", "dmx watch", "--insert-regions", "--check"] {
+        for expected in [
+            "dmx build",
+            "dmx watch",
+            "dmx explain",
+            "--insert-regions",
+            "--check",
+        ] {
             assert!(
                 text.contains(expected),
                 "`dmx {flag}` omitted `{expected}`:\n{text}"

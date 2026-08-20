@@ -20,13 +20,15 @@ use std::path::{Path, PathBuf};
 
 use crate::frontend::{REGION_END, REGION_START, RawDecl, is_region_end, region_opener};
 
-/// One whole sibling Dart file a macro authored and named
-/// [dartmacros.files].
+/// One whole file a macro authored and named [dartmacros.files].
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GeneratedFile {
-    /// A bare `*.dart` file name, validated on receipt from the worker.
+    /// Where it goes: a bare sibling file name for a macro authored in Dart,
+    /// validated on receipt from the worker [dartmacros.files]; a
+    /// workspace-relative path for a Markdown generation group, validated by
+    /// its emitter [typediagram.output].
     pub name: String,
-    /// The file's complete Dart source, normalized like any fragment.
+    /// The file's complete source, normalized like any fragment.
     pub text: String,
 }
 
@@ -170,22 +172,27 @@ pub fn strip_region_bodies(src: &str) -> String {
     out
 }
 
-/// The prefix every macro-authored file's first line carries — the whole
+/// The prefix every machine-authored file's first line carries — the whole
 /// ownership protocol [dartmacros.files]: a file that starts with it is
 /// machine-owned outright, and one that does not is somebody's hand-written
 /// Dart that dmx must never touch.
-#[cfg(not(target_arch = "wasm32"))]
-const FILE_MARKER_PREFIX: &str = "// dmx: generated from ";
+///
+/// Shared with whole-file generation from a Markdown document
+/// [typediagram.output], so one predicate decides ownership for every backend
+/// that writes a file dmx owns. The marker is a string, not a write, so it is
+/// the same on every target this crate compiles for.
+pub const FILE_MARKER_PREFIX: &str = "// dmx: generated from ";
 
 /// What that first line ends with, so the seed's name can be read back out of
 /// it [dartmacros.files].
-#[cfg(not(target_arch = "wasm32"))]
-const FILE_MARKER_SUFFIX: &str = " — do not edit.";
+pub const FILE_MARKER_SUFFIX: &str = " — do not edit.";
 
-/// The exact marker line for files generated from `seed_file_name`.
-#[cfg(not(target_arch = "wasm32"))]
-fn file_marker(seed_file_name: &str) -> String {
-    format!("{FILE_MARKER_PREFIX}{seed_file_name}{FILE_MARKER_SUFFIX}")
+/// The exact marker line for files generated from `seed`, which is a sibling
+/// file name for a Dart macro and a workspace-relative document path for a
+/// Markdown generation group [typediagram.output].
+#[must_use]
+pub fn file_marker(seed: &str) -> String {
+    format!("{FILE_MARKER_PREFIX}{seed}{FILE_MARKER_SUFFIX}")
 }
 
 /// The seed a macro-authored file names on its first line, when that seed is
@@ -207,8 +214,14 @@ pub fn seed_of(path: &Path) -> Option<PathBuf> {
         .trim_end_matches('\n')
         .strip_prefix(FILE_MARKER_PREFIX)?
         .strip_suffix(FILE_MARKER_SUFFIX)?;
-    let seed = path.parent().unwrap_or_else(|| Path::new(".")).join(name);
-    seed.is_file().then_some(seed)
+    // Beside the generated file for a Dart macro's sibling [dartmacros.files];
+    // against the working directory for a Markdown document, whose marker
+    // names a workspace-relative path [typediagram.output].
+    let beside = path.parent().unwrap_or_else(|| Path::new(".")).join(name);
+    let from_workspace = PathBuf::from(name);
+    [beside, from_workspace]
+        .into_iter()
+        .find(|candidate| candidate.is_file())
 }
 
 /// Emits every macro-authored file beside `seed`, and collects the ones a
@@ -242,67 +255,141 @@ pub fn emit_macro_files(seed: &Path, files: &[GeneratedFile], opts: &Options) ->
         }
         let target = dir.join(&file.name);
         let content = format!("{marker}\n\n{}\n", file.text);
-        match fs::read_to_string(&target) {
-            Ok(existing) if existing == content => continue,
-            Ok(existing) if !existing.starts_with(FILE_MARKER_PREFIX) => bail!(
-                "DMX7008: `{}` already exists and carries no dmx marker — a hand-written \
-                 file is never overwritten [dartmacros.files]",
-                target.display()
-            ),
-            Ok(_) => {}
-            Err(error) if error.kind() == ErrorKind::NotFound => {}
-            Err(error) => {
-                return Err(error)
-                    .with_context(|| format!("DMX1002: cannot read {}", target.display()));
-            }
-        }
-        changed = true;
-        if !opts.check {
-            write_atomic(&target, &content)
-                .with_context(|| format!("DMX1003: cannot write {}", target.display()))?;
-        }
+        changed |= write_owned(
+            &target,
+            &content,
+            opts.check,
+            "DMX7008",
+            "[dartmacros.files]",
+        )?;
     }
-    Ok(collect_stale_files(dir, files, &marker, opts.check)? || changed)
+    let kept: Vec<PathBuf> = files.iter().map(|file| dir.join(&file.name)).collect();
+    Ok(collect_stale(&dart_files_in(dir)?, &marker, &kept, opts.check)? || changed)
 }
 
-/// Deletes (or, under `check`, reports) every `.dart` file in `dir` whose
-/// marker names this seed and which this pass did not produce — a dropped
-/// table means a dropped file [dartmacros.files].
+/// Writes one file dmx owns, and says whether that changed anything.
+///
+/// The ownership rule is the whole of the protocol: a target that exists
+/// without the marker on its first line is somebody's hand-written source, and
+/// dmx refuses it rather than replacing it. An identical target is a no-op
+/// [emission.inline-backend.no-op-writes], and under `check` nothing is ever
+/// written [execution].
+///
+/// # Errors
+///
+/// Fails when the target exists without a marker, or on I/O.
 #[cfg(not(target_arch = "wasm32"))]
-fn collect_stale_files(
-    dir: &Path,
-    files: &[GeneratedFile],
-    marker: &str,
+pub fn write_owned(
+    target: &Path,
+    content: &str,
     check: bool,
+    code: &str,
+    spec: &str,
 ) -> Result<bool> {
-    let mut changed = false;
+    match fs::read_to_string(target) {
+        Ok(existing) if existing == content => return Ok(false),
+        Ok(existing) if !existing.starts_with(FILE_MARKER_PREFIX) => bail!(
+            "{code}: `{}` already exists and carries no dmx marker — a hand-written \
+             file is never overwritten {spec}",
+            target.display()
+        ),
+        // Marked, but by something else that is still there: two live sources
+        // claim one file, and each pass would undo the other's. A marker naming
+        // a source that is GONE is an orphan, and taking it over is exactly
+        // what a renamed source should do.
+        Ok(existing) if existing.lines().next() != content.lines().next() => {
+            if let Some(other) = seed_of(target) {
+                bail!(
+                    "{code}: `{}` is already generated from {} {spec}",
+                    target.display(),
+                    other.display()
+                );
+            }
+        }
+        Ok(_) => {}
+        Err(error) if error.kind() == ErrorKind::NotFound => {}
+        Err(error) => {
+            return Err(error)
+                .with_context(|| format!("DMX1002: cannot read {}", target.display()));
+        }
+    }
+    if !check {
+        if let Some(parent) = target
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+        {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("DMX1003: cannot create {}", parent.display()))?;
+        }
+        write_atomic(target, content)
+            .with_context(|| format!("DMX1003: cannot write {}", target.display()))?;
+    }
+    Ok(true)
+}
+
+/// Every `.dart` file directly inside `dir`.
+#[cfg(not(target_arch = "wasm32"))]
+fn dart_files_in(dir: &Path) -> Result<Vec<PathBuf>> {
+    let mut found = Vec::new();
     for entry in fs::read_dir(dir)? {
         let path = entry?.path();
-        let Some(name) = path
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-        else {
-            continue;
-        };
-        let is_dart = path
+        if path
             .extension()
-            .is_some_and(|extension| extension.eq_ignore_ascii_case("dart"));
-        if !is_dart || files.iter().any(|file| file.name == name) {
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("dart"))
+        {
+            found.push(path);
+        }
+    }
+    Ok(found)
+}
+
+/// Deletes (or, under `check`, reports) every candidate whose marker names
+/// this seed and which this pass did not produce — a dropped table means a
+/// dropped file [dartmacros.files], and a dropped template means a dropped
+/// output [typediagram.output].
+///
+/// # Errors
+///
+/// Fails when a stale file cannot be removed.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn collect_stale(
+    candidates: &[PathBuf],
+    marker: &str,
+    kept: &[PathBuf],
+    check: bool,
+) -> Result<bool> {
+    // Resolved, not compared as written: the same file reaches this function
+    // as `lib/a.dart` from a directory sweep and as an absolute path from the
+    // pass that just wrote it, and reading those as two files would delete the
+    // output every second build [typediagram.output].
+    let kept: Vec<PathBuf> = kept.iter().map(|path| resolved(path)).collect();
+    let mut changed = false;
+    for path in candidates {
+        if kept.contains(&resolved(path)) {
             continue;
         }
         // A file that is not UTF-8 cannot carry the ASCII marker; skip it.
-        let Ok(existing) = fs::read_to_string(&path) else {
+        let Ok(existing) = fs::read_to_string(path) else {
             continue;
         };
         if existing.lines().next() == Some(marker) {
             changed = true;
             if !check {
-                fs::remove_file(&path)
+                fs::remove_file(path)
                     .with_context(|| format!("DMX1003: cannot remove {}", path.display()))?;
             }
         }
     }
     Ok(changed)
+}
+
+/// A path in the one form two spellings of it agree on.
+///
+/// A path that is not there yet cannot be resolved, and is its own answer:
+/// nothing this function is asked about can be two files at once.
+#[cfg(not(target_arch = "wasm32"))]
+fn resolved(path: &Path) -> PathBuf {
+    path.canonicalize().unwrap_or_else(|_| path.to_owned())
 }
 
 /// Atomic write: temp file in the same directory, then rename [validation].

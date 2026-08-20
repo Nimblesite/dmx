@@ -9,7 +9,9 @@
 // the editor, from a generator that has stopped working.
 //
 // So: what the setting names, if it exists, and otherwise every Dart package
-// this folder actually holds.
+// this folder actually holds — plus every `*.dmx.md` document in it, because a
+// document generates Dart with no annotated Dart source to find it by
+// [typediagram.documents].
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -72,6 +74,37 @@ function packageLibraries(root, depth = MAX_DEPTH) {
   return found;
 }
 
+/// The suffix that makes a Markdown file one dmx generates from.
+const DOCUMENT_SUFFIX = '.dmx.md';
+
+/// Every `*.dmx.md` document under `root`, as workspace-relative file paths.
+///
+/// Files rather than their directories: `dmx watch` takes either, and naming
+/// the document watches exactly it, where naming `docs/` would watch a whole
+/// tree of prose for changes that can never matter. A package's own
+/// subdirectories ARE searched, unlike `packageLibraries` — a document
+/// normally lives in the package whose `lib` it generates into.
+function documents(root, depth = MAX_DEPTH + 1) {
+  const found = [];
+  let entries = [];
+  try {
+    entries = fs.readdirSync(root, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name));
+  } catch {
+    return found;
+  }
+  for (const entry of entries) {
+    if (entry.name.startsWith('.') || SKIPPED.has(entry.name)) {
+      continue;
+    }
+    if (entry.isFile() && entry.name.endsWith(DOCUMENT_SUFFIX)) {
+      found.push(entry.name);
+    } else if (entry.isDirectory() && depth > 1) {
+      found.push(...documents(path.join(root, entry.name), depth - 1).map((relative) => path.join(entry.name, relative)));
+    }
+  }
+  return found;
+}
+
 /// The paths to hand `dmx`, in the order they were worked out.
 ///
 /// `configured` is what somebody set explicitly, and it is honoured exactly:
@@ -83,7 +116,7 @@ function watchTargets(root, configured, explicit) {
   if (explicit) {
     return present;
   }
-  return [...new Set([...present, ...packageLibraries(root)])];
+  return [...new Set([...present, ...packageLibraries(root), ...documents(root)])];
 }
 
-module.exports = { packageLibraries, watchTargets };
+module.exports = { documents, packageLibraries, watchTargets };

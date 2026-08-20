@@ -39,7 +39,7 @@ A typeDiagram source fence uses backticks, has the ordinary upstream-compatible 
 
 A generation group is one typeDiagram fence followed immediately in the Markdown AST by one or more dmx-enabled Mustache fences. Blank lines do not create AST nodes and do not break the group. Any other Markdown node ends the group.
 
-A dmx-enabled Mustache fence uses `mustache` as its language and a JSON object as the remainder of its info string. The object MUST contain `dmx.output`, a workspace-relative Dart output path:
+A dmx-enabled Mustache fence uses `mustache` as its language and a JSON object as the remainder of its info string. The object MUST contain `dmx.output`, an output path relative to the document's output root ([typediagram.output]), and MAY contain `dmx.target`, the name of a generation target, defaulting to `dart`. Any other key under `dmx` is an error rather than a value dmx ignores, so a misspelling is reported instead of silently generating nothing. Metadata that does not begin with `{` belongs to another convention and MUST be left alone:
 
 ```typeDiagram
 type Product {
@@ -51,6 +51,9 @@ type Product {
 
 ````markdown
 ## Store models
+
+A template binds to the definition immediately above it, so the two fences are
+consecutive: a heading between them would end the group.
 
 ```typeDiagram
 type Product {
@@ -90,6 +93,8 @@ Every declaration exposes `kind`, `name`, `generics`, and mutually exclusive `is
 
 The context builder MAY add further derived strings and booleans, but it MUST NOT discard or reorder source model data. Context schema changes require a version bump and golden fixtures.
 
+Every target-language decision MUST be confined to one generation target: the mapping from a resolved reference to that language's type text, the extension its outputs carry, and the validation a finished file passes. Nothing else in the feature — tokenizer, parser, model, binder, context builder, emitter — may name a language. A target a document names but this build does not carry is `DMX8007`.
+
 ### [typediagram.templates] Rendering
 
 The built-in `typeDiagram` macro renders each bound Mustache body once against its group's complete context. It follows all determinism, partial-resolution, span-mapping, and no-I/O requirements in [rendering]. All target-language decisions needed by the template MUST be finished in the macro's Rust context builder; the template only selects and places prepared values.
@@ -98,17 +103,23 @@ A template failure MUST identify the Markdown file, template fence, template lin
 
 ### [typediagram.output] Validation and Emission
 
-`dmx.output` MUST normalize to a path inside the workspace, MUST end in `.dart`, and MUST NOT traverse a symbolic link outside the workspace. Absolute paths and parent traversal are errors.
+`dmx.output` MUST resolve against the document's **output root**: the nearest ancestor of the document that carries a project marker any target recognises — `pubspec.yaml` for Dart — bounded by the workspace, and the workspace itself when there is none. `lib/models.dart` therefore means *this package's* `lib`, so a document generates the same bytes in the same place whether dmx was run from the package, from the repository root, or from an editor that opened the whole tree.
 
-Rendered output MUST pass the same whitespace normalization, hygiene, full-file Dart re-parse, and `dart analyze --fatal-infos` corpus gates as other generated Dart. It MUST NOT contain `throw`, casts, null assertions, or other constructs forbidden in generated Dart. The file MUST carry a dmx ownership marker containing the source Markdown path, fence identity, template hash, typeDiagram definition hash, and dmx version.
+`dmx.output` MUST normalize to a path inside that root, MUST carry the extension its target generates, and MUST NOT traverse a symbolic link outside it. Absolute paths and parent traversal are errors, and an output path equal to the source document is an error. A document is identified, in its ownership markers and its templates' contexts, by its path relative to that same root, so nothing recorded in a generated file depends on where dmx was launched.
+
+Rendered output MUST pass the same whitespace normalization, hygiene, full-file Dart re-parse, and `dart analyze --fatal-infos` corpus gates as other generated Dart. It MUST NOT contain `throw`, casts, null assertions, or other constructs forbidden in generated Dart; that is [hygiene], enforced over the tree-sitter CST rather than over the text. The file MUST carry a dmx ownership marker containing the source Markdown path, fence identity, template hash, typeDiagram definition hash, context version, and dmx version. Its first line MUST be the same ownership marker whole-file emission already uses [dartmacros.files], so one predicate decides ownership for every backend that writes a file dmx owns.
 
 Whole-file emission follows [dartmacros.files]: never overwrite an unmarked file, write atomically, avoid no-op writes, remove stale owned outputs when their template disappears, and report drift without writing under `--check`. The source Markdown is never rewritten.
+
+An output MUST have one live source. A target already carrying another source's ownership marker MUST be refused while that source still exists, because each pass would otherwise undo the other's. A marker naming a source that is gone identifies an orphan, and taking it over is what renaming a document is supposed to do.
 
 ### [typediagram.execution] Build, Check, Watch, and Explain
 
 `build`, `check`, and `watch` MUST treat the Markdown document, definition fence, template fence, and resolved partials as dependencies of every output. A change to prose outside a generation group MUST NOT invalidate its output. A semantic definition or template change MUST invalidate every dependent output.
 
 `watch` MUST retain the last valid output after an invalid edit and recover on the next valid save. `dmx explain <file.dmx.md>` MUST print each group, its source spans, normalized output paths, dependency hashes, and exact context JSON without rendering or writing.
+
+Stale collection is scoped to the roots the pass was asked to manage: an output whose ownership marker names this document, which the document no longer produces, MUST be removed (or, under `--check`, reported) when it is inside those roots.
 
 ### [typediagram.diagnostics] Diagnostics
 
@@ -123,5 +134,8 @@ The feature owns the `DMX8xxx` range:
 | `DMX8005` | Output path is absolute, escapes the workspace, crosses an unsafe symlink, or is not Dart |
 | `DMX8006` | Output exists without the matching dmx ownership marker |
 | `DMX8007` | typeDiagram compatibility or context schema version is unsupported |
+| `DMX8008` | A bound Mustache template does not compile, or its render is not source the target accepts |
 
 Every diagnostic MUST carry the Markdown path and fenced-block span. When applicable it also carries the typeDiagram line/column, template line/column, generated Dart line/column, and output path.
+
+Rendered source that does not parse, or that breaks [hygiene], is refused by the shared diagnostics those stages already own — `DMX4001` and `DMX4003` — wrapped in a `DMX8008` that names the document, the group, and the template fence. A macro name this registry serves from a Markdown group MUST NOT be reachable as an annotation: `@dmx('typeDiagram')` is `DMX2006`.

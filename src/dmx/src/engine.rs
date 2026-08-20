@@ -19,8 +19,8 @@ use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::{Stream, StreamExt as _};
 use tokio_util::sync::CancellationToken;
 
-use crate::watch::collect_dart_files;
-use crate::{Options, Outcome, process_file};
+use crate::watch::collect_sources;
+use crate::{Options, Outcome, process_path};
 
 /// Generation events a slow subscriber may fall behind by before it starts
 /// missing them. A missed event costs a subscriber one redundant re-query, not
@@ -126,7 +126,7 @@ impl Engine {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
-    /// The Dart sources a scope resolves to, with the zero-config exclusions
+    /// The sources a scope resolves to, with the zero-config exclusions
     /// applied [surface.zero-config].
     fn targets(&self, scope: &RescanScope) -> Result<Vec<PathBuf>, EngineError> {
         let paths = match scope {
@@ -136,7 +136,7 @@ impl Engine {
             // slower than the narrower one it stood in for.
             _ => self.roots.as_slice(),
         };
-        collect_dart_files(paths).map_err(|error| EngineError::Scan(format!("{error:#}")))
+        collect_sources(paths).map_err(|error| EngineError::Scan(format!("{error:#}")))
     }
 
     /// Records `pass` as the current state and publishes the new generation.
@@ -157,8 +157,8 @@ impl Engine {
 
 /// One file through the whole pipeline, with failure recorded rather than
 /// propagated: a source that does not parse must not stop its neighbours.
-fn run_one(path: &Path, opts: Options) -> FileOutcome {
-    match process_file(path, &opts) {
+fn run_one(path: &Path, roots: &[PathBuf], opts: Options) -> FileOutcome {
+    match process_path(path, roots, &opts) {
         Ok(Outcome::Updated) => FileOutcome::Written,
         Ok(Outcome::Unchanged) => FileOutcome::Unchanged,
         Err(error) => FileOutcome::Refused(format!("{error:#}")),
@@ -208,7 +208,7 @@ impl EngineApi for Engine {
         let files = targets
             .into_iter()
             .map(|path| {
-                let outcome = run_one(&path, self.opts);
+                let outcome = run_one(&path, &self.roots, self.opts);
                 (path, outcome)
             })
             .collect();

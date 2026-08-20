@@ -132,14 +132,20 @@ impl<'a> Json<'a> {
     /// One member of a JSON object, or nothing when this value is not an
     /// object or does not carry that name.
     ///
+    /// A dotted name walks into nested objects, so `{{source.path}}` reads what
+    /// its spelling says it reads. Mustache calls this a dotted name and the
+    /// template engine does not resolve it — the tag arrives here whole — so
+    /// this is where it has to be understood [dartmacros.render].
+    ///
     /// Returning `None` rather than a null is what lets ramhorns walk out to
     /// the enclosing context, so a nested section still reads a name declared
     /// at the root of the model.
     fn field(self, name: &str) -> Option<&'a Value> {
-        match self.0 {
-            Value::Object(fields) => fields.get(name),
-            _ => None,
-        }
+        name.split('.')
+            .try_fold(self.0, |value, segment| match value {
+                Value::Object(fields) => fields.get(segment),
+                _ => None,
+            })
     }
 
     /// Renders the member called `name` with `render`, reporting whether this
@@ -168,7 +174,7 @@ mod tests {
 
     /// Renders `template` against `model` the way the driver does.
     fn render(template: &str, model: &serde_json::Value) -> String {
-        crate::render::render_json("test", template, model).expect("render")
+        crate::render::render_json(template, model).expect("render")
     }
 
     /// [dartmacros.render]: scalars, lists, and nesting read as Mustache says.
@@ -199,6 +205,20 @@ mod tests {
             &json!({"fields": []}),
         );
         assert_eq!(out, "none");
+    }
+
+    /// [dartmacros.render]: a dotted name walks into a nested object, and one
+    /// that names nothing renders nothing.
+    #[test]
+    fn a_dotted_name_reads_a_nested_member() {
+        let model = json!({"source": {"path": "docs/a.dmx.md", "fence": {"line": 7}}});
+        assert_eq!(
+            render(
+                "{{source.path}}:{{source.fence.line}}|{{source.missing}}|{{a.b}}",
+                &model
+            ),
+            "docs/a.dmx.md:7||"
+        );
     }
 
     /// [dartmacros.render]: a section reads names from the enclosing model.

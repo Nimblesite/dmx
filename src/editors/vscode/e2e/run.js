@@ -14,7 +14,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { runTests } = require('@vscode/test-electron');
-const { annotatedClass } = require('./fixture.js');
+const { annotatedClass, document } = require('./fixture.js');
 
 const BINARY = process.platform === 'win32' ? 'dmx.exe' : 'dmx';
 
@@ -35,6 +35,10 @@ function writeWorkspace(workspace) {
   );
   fs.writeFileSync(path.join(workspace, 'lib', 'profile.dart'), annotatedClass('Profile', 'handle'));
   fs.writeFileSync(path.join(workspace, 'lib', 'settings.dart'), annotatedClass('Settings', 'theme'));
+  // A document with no Dart behind it [typediagram.documents]: the extension
+  // has to find it, watch it, and generate the file it names.
+  fs.mkdirSync(path.join(workspace, 'docs'), { recursive: true });
+  fs.writeFileSync(path.join(workspace, 'docs', 'shipping.dmx.md'), document('Parcel', 'tracking'));
 }
 
 async function main() {

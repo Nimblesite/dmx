@@ -1,0 +1,238 @@
+{
+  "version": 1,
+  "decls": [
+    {
+      "kind": "alias",
+      "name": "Email",
+      "generics": [],
+      "target": {
+        "name": "String",
+        "args": []
+      }
+    },
+    {
+      "kind": "alias",
+      "name": "UserId",
+      "generics": [],
+      "target": {
+        "name": "Uuid",
+        "args": []
+      }
+    },
+    {
+      "kind": "alias",
+      "name": "Callback",
+      "generics": [],
+      "target": {
+        "name": "Option",
+        "args": [
+          {
+            "name": "String",
+            "args": []
+          }
+        ]
+      }
+    },
+    {
+      "kind": "alias",
+      "name": "Index",
+      "generics": [
+        "K"
+      ],
+      "target": {
+        "name": "Map",
+        "args": [
+          {
+            "name": "K",
+            "args": []
+          },
+          {
+            "name": "List",
+            "args": [
+              {
+                "name": "Email",
+                "args": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "kind": "function",
+      "name": "fetch",
+      "generics": [
+        "T"
+      ],
+      "signatures": [
+        {
+          "params": [
+            {
+              "name": "request",
+              "type": {
+                "name": "Request",
+                "args": []
+              }
+            },
+            {
+              "name": "fallback",
+              "type": {
+                "name": "Option",
+                "args": [
+                  {
+                    "name": "T",
+                    "args": []
+                  }
+                ]
+              }
+            }
+          ],
+          "returns": {
+            "name": "Response",
+            "args": []
+          }
+        }
+      ]
+    },
+    {
+      "kind": "function",
+      "name": "store",
+      "generics": [],
+      "signatures": [
+        {
+          "params": [
+            {
+              "name": "item",
+              "type": {
+                "name": "Request",
+                "args": []
+              }
+            }
+          ],
+          "returns": {
+            "name": "Unit",
+            "args": []
+          },
+          "async": true
+        }
+      ]
+    },
+    {
+      "kind": "function",
+      "name": "read",
+      "generics": [],
+      "signatures": [
+        {
+          "params": [
+            {
+              "name": "path",
+              "type": {
+                "name": "String",
+                "args": []
+              }
+            }
+          ],
+          "returns": {
+            "name": "Bytes",
+            "args": []
+          }
+        },
+        {
+          "params": [
+            {
+              "name": "path",
+              "type": {
+                "name": "String",
+                "args": []
+              }
+            },
+            {
+              "name": "timeout",
+              "type": {
+                "name": "Float",
+                "args": []
+              }
+            }
+          ],
+          "returns": {
+            "name": "Bytes",
+            "args": []
+          },
+          "async": true
+        }
+      ]
+    },
+    {
+      "kind": "function",
+      "name": "drain",
+      "generics": [],
+      "signatures": [
+        {
+          "params": [],
+          "returns": {
+            "name": "Unit",
+            "args": []
+          }
+        },
+        {
+          "params": [
+            {
+              "name": "limit",
+              "type": {
+                "name": "Int",
+                "args": []
+              }
+            }
+          ],
+          "returns": {
+            "name": "Int",
+            "args": []
+          },
+          "async": true
+        }
+      ]
+    },
+    {
+      "kind": "function",
+      "name": "nothing",
+      "generics": [],
+      "signatures": [
+        {
+          "params": [],
+          "returns": {
+            "name": "Unit",
+            "args": []
+          }
+        }
+      ]
+    },
+    {
+      "kind": "record",
+      "name": "Request",
+      "generics": [],
+      "fields": [
+        {
+          "name": "url",
+          "type": {
+            "name": "String",
+            "args": []
+          }
+        }
+      ]
+    },
+    {
+      "kind": "record",
+      "name": "Response",
+      "generics": [],
+      "fields": [
+        {
+          "name": "status",
+          "type": {
+            "name": "Int",
+            "args": []
+          }
+        }
+      ]
+    }
+  ]
+}

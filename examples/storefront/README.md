@@ -33,6 +33,21 @@ dart test
 | [inventory.dart](lib/inventory.dart) | `@dmx('diff')` `@dmx('model')` | What changed, as data, for audit trails and unsaved-changes banners. Collections compare by content, so `diff` agrees with `==`. |
 | [l10n.dart](lib/l10n.dart) | `@dmx('strings')` | A message is a method signature. `{count}` in the template must correspond to a parameter called `count`, checked at generation time rather than by a customer. |
 
+## One model, defined in Markdown
+
+[docs/shipping.dmx.md](docs/shipping.dmx.md) has no annotated Dart behind it at
+all. The types are declared once in a typeDiagram fence, and the two Mustache
+fences under it generate [lib/shipping.dart](lib/shipping.dart) — records,
+a sealed union, and a typedef — and
+[lib/shipping_wire.dart](lib/shipping_wire.dart), a constant wire-name table.
+Both are functions of the same definition, so a field added to the diagram
+changes both files together. The definition still renders as a diagram, so that
+one page is the model, its documentation, and the build input.
+
+[test/shipping_test.dart](test/shipping_test.dart) constructs the generated
+types, switches over the union without a default arm, and checks that the two
+generated files agree.
+
 ## Reading order
 
 If you read one file, read [catalog.dart](lib/catalog.dart) — the decoder there

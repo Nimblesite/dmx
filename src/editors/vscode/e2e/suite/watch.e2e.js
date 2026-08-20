@@ -251,6 +251,43 @@ describe('the packaged VSIX, running the engine it carries', () => {
     assertUserCode('lib/settings.dart', ['final int retries;', 'required this.retries']);
   });
 
+  it('generates from a *.dmx.md document, and regenerates when it is saved', async () => {
+    // No annotation anywhere: the only source of truth is the diagram in
+    // docs/shipping.dmx.md [typediagram.documents].
+    await until('the document to generate lib/parcel.dart', () => {
+      try {
+        return read('lib/parcel.dart').includes('final class Parcel {');
+      } catch {
+        return false;
+      }
+    });
+    const generated = read('lib/parcel.dart');
+    assert.ok(
+      generated.startsWith('// dmx: generated from docs/shipping.dmx.md'),
+      `lib/parcel.dart carries no ownership marker:\n${generated}`,
+    );
+    assert.match(generated, /const Parcel\(\{required this\.tracking\}\);/);
+    assert.match(generated, /final String tracking;/);
+
+    // Saving the document regenerates it, with no command.
+    const opened = await openInEditor('docs/shipping.dmx.md');
+    await editOnce(opened.editor, 'tracking: String', 'tracking: String\n  weightG: Int');
+    assert.ok(await opened.document.save(), 'docs/shipping.dmx.md did not save');
+    await until('the saved document to regenerate lib/parcel.dart', () =>
+      read('lib/parcel.dart').includes('final int weightG;'),
+    );
+    assert.match(
+      read('lib/parcel.dart'),
+      /const Parcel\(\{required this\.tracking, required this\.weightG\}\);/,
+    );
+
+    // The document itself is never rewritten.
+    assert.ok(
+      read('docs/shipping.dmx.md').includes('That is the whole document.'),
+      'the document was rewritten',
+    );
+  });
+
   it('stop, build, and restart from the palette all drive the real engine', async () => {
     await vscode.commands.executeCommand('dmx.stopWatcher');
 

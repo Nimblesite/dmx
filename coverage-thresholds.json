@@ -5,11 +5,11 @@
   "_measuring": "Every component reports LCOV, and the gate sums LH/LF per component. Field order differs between producers (Node emits LH before LF, vitest emits LF before LH) — summing each field independently is order-independent, which is why the check does that rather than parsing records.",
   "components": {
     "rust": {
-      "threshold": 90,
+      "threshold": 93,
       "lcov": "lcov.info",
-      "_covers": "The dmx crate at src/dmx — the parser, context builder, renderer, validator and emitter. Everything the binary does.",
+      "_covers": "The dmx crate at src/dmx — the parser, context builder, renderer, validator and emitter. Everything the binary does, the typeDiagram Markdown front end included.",
       "_produced_by": "cargo llvm-cov --workspace --all-targets",
-      "_measured": "91.2% when the macro catalogue landed. [COVERAGE-THRESHOLDS] requires 85 for a CLI tool, which this clears."
+      "_measured": "93.7% (6003/6404 lines) when the typeDiagram Markdown macro landed, up from 91.2% when the macro catalogue did. [COVERAGE-THRESHOLDS] requires 85 for a CLI tool, which this clears twice over."
     },
     "dart-package": {
       "threshold": 13,

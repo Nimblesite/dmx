@@ -24,9 +24,11 @@ pub mod emit;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod engine;
 pub mod frontend;
+pub mod hygiene;
 pub mod jsoncontent;
 pub mod macros;
 pub mod render;
+pub mod typediagram;
 pub mod types;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod watch;
@@ -38,6 +40,23 @@ use std::fs;
 use std::path::Path;
 
 pub use emit::{GeneratedFile, Options};
+
+/// The version this build reports [release.version].
+///
+/// The tag is the version. `Cargo.toml` carries the placeholder `0.0.0` and is
+/// never rewritten — cargo owns that file, and nothing in this repository may
+/// edit a structured file by pattern. The release passes the version the tag
+/// names in `DMX_VERSION` instead, so the number is a property of the build
+/// rather than of a commit somebody had to remember to bump.
+///
+/// A build with nothing to inject reports the placeholder, which is the honest
+/// answer: a local build is not a release. It lives in the library rather than
+/// the binary because generated files record which build wrote them
+/// [typediagram.output].
+pub const VERSION: &str = match option_env!("DMX_VERSION") {
+    Some(version) => version,
+    None => env!("CARGO_PKG_VERSION"),
+};
 
 /// What one file's pass through the pipeline came to.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -222,8 +241,32 @@ fn process_source_inner(
     })
 }
 
+/// Runs the pipeline over one source, whatever kind it is
+/// [typediagram.execution].
+///
+/// A Dart file is generated into; a Markdown document generates whole files
+/// from its typeDiagram groups. `roots` is the scope this pass was asked to
+/// manage, which is where a document's stale outputs are collected from.
+///
+/// # Errors
+///
+/// Fails for the same reasons the kind-specific entry point does.
 #[cfg(not(target_arch = "wasm32"))]
-/// Runs the pipeline over one file, writing it — and every file its macros
+pub fn process_path(path: &Path, roots: &[std::path::PathBuf], opts: &Options) -> Result<Outcome> {
+    // A pass enumerates its sources up front. One of them can be a generated
+    // file that a Markdown document in the same pass has since collected
+    // [typediagram.output] — a file that is gone is not a file that failed.
+    if !path.exists() {
+        return Ok(Outcome::Unchanged);
+    }
+    if typediagram::is_markdown(path) {
+        return typediagram::document::process(path, roots, opts);
+    }
+    process_file(path, opts)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+/// Runs the pipeline over one Dart file, writing it — and every file its macros
 /// authored [dartmacros.files] — only when something changed.
 ///
 /// # Errors
