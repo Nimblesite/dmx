@@ -466,9 +466,9 @@ corpus: ## Generate every golden sample and prove it is valid Dart
 	cargo run $(CRATE) --quiet -- build $(CORPUS_DIR)/lib --insert-regions
 	cd $(CORPUS_DIR) && dart pub get && dart analyze --fatal-infos
 	@# The typeDiagram corpus is generated the other way round: no annotated
-	@# Dart at all, just `tests/typediagram/corpus/*.td` rendered through
-	@# `tests/typediagram/golden/template.mustache`. `cargo test --test
-	@# typediagram_golden` proves the committed files are what the binary
+	@# Dart at all, just `tests/typediagram/corpus/*.td` rendered through the
+	@# canonical model template dmx ships [typediagram.canonical]. `cargo test
+	@# --test typediagram_golden` proves the committed files are what the binary
 	@# writes; this proves they are Dart the analyzer accepts, which is the
 	@# half a byte comparison cannot do.
 	cd $(TD_GOLDEN_DIR) && dart pub get && dart analyze --fatal-infos
