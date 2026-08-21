@@ -285,9 +285,13 @@ fn render_reply(request: &Value) -> Value {
             "error": format!("DMX7009: the `render` request for `{name}` carries no string `template`"),
         });
     };
-    match render::render_json(name, template, request.get("context").unwrap_or(&NOTHING)) {
+    match render::render_json(template, request.get("context").unwrap_or(&NOTHING)) {
         Ok(text) => json!({"v": 1, "id": id, "text": text}),
-        Err(error) => json!({"v": 1, "id": id, "error": format!("{error:#}")}),
+        Err(error) => json!({
+            "v": 1,
+            "id": id,
+            "error": format!("DMX7009: macro template `{name}` does not compile: {error:#}"),
+        }),
     }
 }
 

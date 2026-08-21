@@ -1,0 +1,185 @@
+{{! The canonical model template [typediagram.canonical]. }}
+// Generated from {{source.path}}. Edit the definition, not this file.
+{{#needsRuntime}}
+
+{{{runtimeImport}}}
+{{/needsRuntime}}
+{{#declarations}}
+{{#isAlias}}
+
+/// `{{name}}` as the diagram declares it.
+typedef {{name}}{{{genericDeclaration}}} = {{{dartType}}};
+{{/isAlias}}
+{{#isFunction}}
+{{#signatures}}
+
+/// Signature {{index}} of `{{name}}`, as the diagram declares it.
+typedef {{pascalName}}{{#isOverload}}{{index}}{{/isOverload}}{{{genericDeclaration}}} = {{#isAsync}}Future<{{{returnType}}}>{{/isAsync}}{{^isAsync}}{{{returnType}}}{{/isAsync}} Function({{{parameterList}}});
+{{/signatures}}
+{{/isFunction}}
+{{#isUnion}}
+
+/// {{label}} — exactly one of the cases below{{#untagged}}, told apart by shape
+/// rather than by a tag{{/untagged}}.
+sealed class {{name}}{{{genericDeclaration}}} {
+  /// The shared constructor every case delegates to.
+  const {{name}}();
+}
+{{#hasJson}}
+
+/// JSON for [{{name}}].
+extension {{jsonExtension}} on {{{classType}}} {
+  /// Decodes whichever case the payload's {{{discriminator}}} names.
+  static {{{decodeResult}}} fromJson(Object? json, [String path = '{{name}}']) =>
+      switch (json) {
+        {
+          {{{discriminator}}}: final String type,
+        } =>
+          switch (type) {
+{{#variants}}
+            {{{tag}}} => {{jsonExtension}}.fromJson(json, path),
+{{/variants}}
+            _ => {{{decodeFailure}}},
+          },
+        _ => {{{decodeFailure}}},
+      };
+
+  /// This value as a JSON map, tagged with the case it is.
+  {{{jsonMap}}} toJson() => switch (this) {
+{{#variants}}
+        final {{{classType}}} value => <String, Object?>{
+            {{{discriminator}}}: {{{tag}}},
+            ...value.toJson(),
+          },
+{{/variants}}
+      };
+}
+{{/hasJson}}
+{{/isUnion}}
+{{#classes}}
+
+{{#owner}}
+/// The `{{name}}` case of {{owner}}, as an immutable value.
+{{/owner}}
+{{^owner}}
+/// {{label}} — an immutable value from the diagram.
+{{/owner}}
+final class {{{classType}}}{{{superClause}}} {
+  /// Every field, in the order the diagram declares them.
+  const {{className}}({{{constructorParameters}}}){{{superCall}}};
+{{#hasDiscriminant}}
+
+  /// The discriminant the diagram gives this case.
+  static const int discriminant = {{discriminant}};
+{{/hasDiscriminant}}
+{{#fields}}
+
+  /// The `{{name}}` field, declared as `{{{typeDiagram}}}`.
+  final {{{dartType}}} {{name}};
+{{/fields}}
+
+  @override
+  bool operator ==(Object {{otherParam}}) =>
+      identical(this, {{otherParam}}) ||
+      ({{otherParam}} is {{{classType}}}{{#fields}}{{#isValue}} &&
+          {{{equalsExpr}}}{{/isValue}}{{/fields}});
+
+{{#hasValues}}
+  @override
+  int get hashCode => {{hashCombiner}}({{#useHashAll}}[{{/useHashAll}}
+        runtimeType,
+{{#fields}}
+{{#isValue}}
+        {{{hashExpr}}},
+{{/isValue}}
+{{/fields}}
+      {{#useHashAll}}]{{/useHashAll}});
+{{/hasValues}}
+{{^hasValues}}
+  @override
+  int get hashCode => runtimeType.hashCode;
+{{/hasValues}}
+
+  @override
+  String toString() => '{{className}}({{#fields}}{{#isValue}}{{{toStringExpr}}}{{^isLastValue}}, {{/isLastValue}}{{/isValue}}{{/fields}})';
+{{#canCopy}}
+
+  /// A copy of this value with the named fields replaced.
+  {{{classType}}} copyWith({
+{{#fields}}
+    {{{copyParam}}},
+{{/fields}}
+  }) =>
+      {{className}}(
+{{#fields}}
+        {{{copyArg}}},
+{{/fields}}
+      );
+{{/canCopy}}
+}
+{{#hasJson}}
+
+/// JSON for [{{className}}].
+extension {{jsonExtension}} on {{{classType}}} {
+  /// Decodes a `{{className}}` from a JSON value, or says why it could not.
+  static {{{decodeResult}}} fromJson(Object? json, [String path = '{{className}}']) =>
+      switch (json) {
+{{#hasPattern}}
+        {
+{{#fields}}
+{{#inPattern}}
+          {{{jsonKey}}}: final {{{patternType}}} {{bind}},
+{{/inPattern}}
+{{/fields}}
+        } =>
+{{/hasPattern}}
+{{^hasPattern}}
+        {{{jsonShape}}} =>
+{{/hasPattern}}
+{{#hasComplex}}
+          switch ((
+{{#fields}}
+{{#isComplex}}
+            {{{resultExpr}}},
+{{/isComplex}}
+{{/fields}}
+          )) {
+            (
+{{#fields}}
+{{#isComplex}}
+              {{{decodeOk}}}(value: final {{bind}}),
+{{/isComplex}}
+{{/fields}}
+            ) =>
+              {{{decodeOk}}}({{className}}(
+{{#fields}}
+                {{name}}: {{{ctorExpr}}},
+{{/fields}}
+              )),
+{{#fields}}
+{{#isComplex}}
+            {{{errPattern}}} => {{{decodeErr}}},
+{{/isComplex}}
+{{/fields}}
+          },
+{{/hasComplex}}
+{{^hasComplex}}
+          {{{decodeOk}}}({{className}}(
+{{#fields}}
+            {{name}}: {{{ctorExpr}}},
+{{/fields}}
+          )),
+{{/hasComplex}}
+        _ => {{{decodeFailure}}},
+      };
+
+  /// This value as a JSON map.
+  {{{jsonMap}}} toJson() => <String, Object?>{
+{{#fields}}
+        {{{jsonKey}}}: {{{encodeExpr}}},
+{{/fields}}
+      };
+}
+{{/hasJson}}
+{{/classes}}
+{{/declarations}}

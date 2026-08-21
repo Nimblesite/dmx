@@ -11,7 +11,7 @@ Implementation code, tests, and diagnostics MUST cite the identifier they satisf
 | [Authoring, conformance, and goals](authoring-and-goals.md) | `[authoring]`, `[conformance]`, `[goals]` | Roles, authoring contract, conformance language, goals and non-goals |
 | [Repository layout](repository.md) | `[repo]` | Where code lives, and holding the repository's own tooling to it |
 | [Architecture](architecture.md) | `[architecture]` | Parse-to-cache pipeline and purity boundary |
-| [typeDiagram Markdown macro](typediagram-markdown.md) | `[typediagram]` | Built-in macro: typeDiagram definitions plus Mustache templates to generated Dart |
+| [typeDiagram macro](typediagram.md) | `[typediagram]` | Built-in macro: typeDiagram definitions plus Mustache templates to generated Dart |
 | [Consumer surface and front end](consumer-surface.md) | `[surface]`, `[context]`, `[frontend]` | Annotations, template context, parsing and name resolution |
 | [Extension layers and Dart macros](extensions.md) | `[extensions]`, `[dartmacros]` | Workers, transforms, engines, and user-defined macros |
 | [Rendering, hygiene, and validation](rendering-and-validation.md) | `[rendering]`, `[hygiene]`, `[validation]` | Template execution and generated-source safety |

@@ -48,6 +48,8 @@
   ],
   "activationEvents": [
     "workspaceContains:**/pubspec.yaml",
+    "workspaceContains:**/*.dmx.md",
+    "workspaceContains:**/*.td",
     "onLanguage:dart"
   ],
   "contributes": {

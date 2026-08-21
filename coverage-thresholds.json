@@ -5,18 +5,18 @@
   "_measuring": "Every component reports LCOV, and the gate sums LH/LF per component. Field order differs between producers (Node emits LH before LF, vitest emits LF before LH) — summing each field independently is order-independent, which is why the check does that rather than parsing records.",
   "components": {
     "rust": {
-      "threshold": 90,
+      "threshold": 93,
       "lcov": "lcov.info",
-      "_covers": "The dmx crate at src/dmx — the parser, context builder, renderer, validator and emitter. Everything the binary does.",
+      "_covers": "The dmx crate at src/dmx — the parser, context builder, renderer, validator and emitter. Everything the binary does, both typeDiagram front ends included: standalone `.td` definitions with the canonical model template or a `.mustache` beside them, and Markdown documents.",
       "_produced_by": "cargo llvm-cov --workspace --all-targets",
-      "_measured": "91.2% when the macro catalogue landed. [COVERAGE-THRESHOLDS] requires 85 for a CLI tool, which this clears."
+      "_measured": "94.0% (6560/6977 lines) when the canonical model template landed, up from 93.7% when the typeDiagram Markdown macro did and 91.2% when the macro catalogue did. The threshold stays at 93 rather than tracking the measure exactly: a floor with no headroom fails CI on noise rather than on a regression. [COVERAGE-THRESHOLDS] requires 85 for a CLI tool, which this clears twice over."
     },
     "dart-package": {
       "threshold": 13,
       "lcov": "src/dart_packages/dmx/lcov.info",
       "_covers": "src/dart_packages/dmx/lib — the published runtime every consumer of dmx depends on: Result/Ok/Err, the decoders, DmxPatch, the transport seam, and the macro-authoring API.",
       "_produced_by": "dart test --coverage + coverage:format_coverage --report-on=lib",
-      "_measured": "13.1% (54/411 lines) on 2026-08-15, up from 11.4% (47/411) when the release stamper's tests started exercising Result. THE WORST NUMBER IN THE REPO AND THE ONE THAT MATTERS MOST — this package is on pub.dev. dmx.dart, support.dart and transport.dart are still almost entirely unmeasured. The runtime IS exercised end-to-end by the storefront's 179 tests and the golden corpus, which is why nothing has broken; it is not exercised by its own suite, so a refactor of it is unprotected. Ratchet this hard."
+      "_measured": "13.1% (54/411 lines) on 2026-08-15, up from 11.4% (47/411) when the release stamper's tests started exercising Result. THE WORST NUMBER IN THE REPO AND THE ONE THAT MATTERS MOST — this package is on pub.dev. dmx.dart, support.dart and transport.dart are still almost entirely unmeasured. The runtime IS exercised end-to-end by the storefront's suite and the golden corpus, which is why nothing has broken; it is not exercised by its own suite, so a refactor of it is unprotected. Ratchet this hard."
     },
     "vscode-extension": {
       "threshold": 95,

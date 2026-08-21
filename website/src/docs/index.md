@@ -27,6 +27,11 @@ are ready to use. A **[custom macro](/docs/dart-custom-macros/)** is a Dart
 program in your own project, for generating something the built-ins do not
 cover — reading a database schema, say, or an API document.
 
+Not every model starts as Dart. When the types live in a design document rather
+than in a class, write them once in a `.td` definition and dmx writes the Dart:
+immutable classes that compare by value, with JSON beside them instead of
+inside them — see **[Models from a diagram](/docs/models-from-a-diagram/)**.
+
 You opt in with the package's single annotation type:
 
 ```dart

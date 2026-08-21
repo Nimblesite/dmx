@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "decls": [
+    {
+      "kind": "record",
+      "name": "OnlyDartAndRust",
+      "generics": [],
+      "fields": [
+        {
+          "name": "a",
+          "type": {
+            "name": "Int",
+            "args": []
+          }
+        }
+      ],
+      "targeting": {
+        "targets": [
+          "dart",
+          "rust"
+        ]
+      }
+    },
+    {
+      "kind": "record",
+      "name": "NotGo",
+      "generics": [],
+      "fields": [
+        {
+          "name": "b",
+          "type": {
+            "name": "String",
+            "args": []
+          }
+        }
+      ],
+      "targeting": {
+        "skipTargets": [
+          "go"
+        ]
+      }
+    },
+    {
+      "kind": "union",
+      "name": "Both",
+      "generics": [],
+      "targeting": {
+        "targets": [
+          "dart"
+        ],
+        "skipTargets": [
+          "python"
+        ]
+      },
+      "variants": [
+        {
+          "name": "One",
+          "fields": []
+        },
+        {
+          "name": "Two",
+          "fields": [
+            {
+              "name": "x",
+              "type": {
+                "name": "Int",
+                "args": []
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "alias",
+      "name": "Plain",
+      "generics": [],
+      "target": {
+        "name": "Int",
+        "args": []
+      }
+    }
+  ]
+}

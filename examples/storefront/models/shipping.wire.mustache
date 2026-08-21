@@ -1,0 +1,30 @@
+// Generated from models/shipping.td. Edit the definition, not this file.
+
+/// The wire name of every field, keyed by declaration and then by Dart name.
+const shippingWireNames = <String, Map<String, String>>{
+{{#declarations}}
+{{#isRecord}}
+  '{{name}}': <String, String>{
+{{#fields}}
+    '{{name}}': '{{snakeName}}',
+{{/fields}}
+  },
+{{/isRecord}}
+{{#isUnion}}
+{{#variants}}
+  '{{owner}}.{{name}}': <String, String>{
+{{#fields}}
+    '{{name}}': '{{snakeName}}',
+{{/fields}}
+  },
+{{/variants}}
+{{/isUnion}}
+{{/declarations}}
+};
+
+/// Every declaration the shipping diagram carries, in source order.
+const shippingDeclarations = <String>[
+{{#declarations}}
+  '{{name}}',
+{{/declarations}}
+];

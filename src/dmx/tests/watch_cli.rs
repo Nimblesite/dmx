@@ -18,14 +18,19 @@
 
 mod support;
 
+#[path = "support/watch.rs"]
+mod watch;
+
 use std::fs;
-use std::io::{self, BufRead, BufReader, Read};
+use std::io;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Output, Stdio};
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
+use std::process::{Command, Output, Stdio};
+use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
+
 use support::TempDirectory;
+use watch::{READY_TIMEOUT, REGENERATION_TIMEOUT, WatchProcess, error_log};
 
 const INITIAL_SOURCE: &str = r"@dmx('model')
 class User {
@@ -35,8 +40,6 @@ class User {
 }
 ";
 
-const READY_TIMEOUT: Duration = Duration::from_secs(5);
-const REGENERATION_TIMEOUT: Duration = Duration::from_secs(5);
 const QUIET_PERIOD: Duration = Duration::from_millis(750);
 
 struct GeneratedFixture {
@@ -80,182 +83,6 @@ impl WatchedGeneratedFixture {
     }
 }
 
-struct WatchProcess {
-    child: Child,
-    logs: Receiver<String>,
-    observed: Vec<String>,
-}
-
-impl WatchProcess {
-    fn spawn_ready(path: &Path) -> io::Result<Self> {
-        let mut watcher = Self::spawn(path)?;
-        watcher.wait_until_ready(1)?;
-        Ok(watcher)
-    }
-
-    fn spawn(path: &Path) -> io::Result<Self> {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_dmx"))
-            .arg("watch")
-            .arg(path)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()?;
-        let stdout = child
-            .stdout
-            .take()
-            .ok_or_else(|| io::Error::other("watch stdout was not piped"))?;
-        let stderr = child
-            .stderr
-            .take()
-            .ok_or_else(|| io::Error::other("watch stderr was not piped"))?;
-        let (sender, logs) = mpsc::channel();
-        spawn_line_reader("stdout", stdout, sender.clone());
-        spawn_line_reader("stderr", stderr, sender);
-        Ok(Self {
-            child,
-            logs,
-            observed: Vec::new(),
-        })
-    }
-
-    fn wait_until_ready(&mut self, root_count: usize) -> io::Result<()> {
-        let expected = format!("stdout: dmx: watching {root_count} path(s)");
-        self.wait_for_log(READY_TIMEOUT, |line| line == expected, &expected)
-    }
-
-    fn wait_for_write(&mut self, path: &Path) -> io::Result<()> {
-        let expected = write_log(path)?;
-        self.wait_for_log(REGENERATION_TIMEOUT, |line| line == expected, &expected)
-    }
-
-    fn wait_for_error(&mut self, path: &Path, diagnostic: &str) -> io::Result<()> {
-        let expected = error_log(path, diagnostic)?;
-        self.wait_for_log(
-            REGENERATION_TIMEOUT,
-            |line| line.starts_with(&expected),
-            &expected,
-        )
-    }
-
-    fn wait_for_log(
-        &mut self,
-        timeout: Duration,
-        matches: impl Fn(&str) -> bool,
-        expected: &str,
-    ) -> io::Result<()> {
-        let baseline = self.observed.len();
-        self.wait_for_observed(timeout, expected, |lines| {
-            lines[baseline..].iter().any(|line| matches(line))
-        })
-    }
-
-    fn wait_for_error_and_write(
-        &mut self,
-        invalid_path: &Path,
-        diagnostic: &str,
-        valid_path: &Path,
-    ) -> io::Result<()> {
-        let error = error_log(invalid_path, diagnostic)?;
-        let write = write_log(valid_path)?;
-        let expected = format!("`{error}…` and `{write}`");
-        let baseline = self.observed.len();
-        self.wait_for_observed(REGENERATION_TIMEOUT, &expected, |lines| {
-            lines[baseline..]
-                .iter()
-                .any(|line| line.starts_with(&error))
-                && lines[baseline..].iter().any(|line| line == &write)
-        })
-    }
-
-    fn wait_for_observed(
-        &mut self,
-        timeout: Duration,
-        expected: &str,
-        complete: impl Fn(&[String]) -> bool,
-    ) -> io::Result<()> {
-        let deadline = Instant::now() + timeout;
-        loop {
-            if complete(&self.observed) {
-                return Ok(());
-            }
-            let remaining = deadline.saturating_duration_since(Instant::now());
-            match self.logs.recv_timeout(remaining) {
-                Ok(line) => self.observed.push(line),
-                Err(RecvTimeoutError::Timeout) => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::TimedOut,
-                        format!(
-                            "watcher never emitted `{expected}`; output:\n{}",
-                            self.output()
-                        ),
-                    ));
-                }
-                Err(RecvTimeoutError::Disconnected) => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::BrokenPipe,
-                        format!(
-                            "watcher exited before emitting `{expected}`; output:\n{}",
-                            self.output()
-                        ),
-                    ));
-                }
-            }
-        }
-    }
-
-    fn observe_for(&mut self, duration: Duration) {
-        let deadline = Instant::now() + duration;
-        loop {
-            let remaining = deadline.saturating_duration_since(Instant::now());
-            if remaining.is_zero() {
-                break;
-            }
-            match self.logs.recv_timeout(remaining) {
-                Ok(line) => self.observed.push(line),
-                Err(RecvTimeoutError::Timeout | RecvTimeoutError::Disconnected) => break,
-            }
-        }
-    }
-
-    fn writes(&self) -> Vec<&str> {
-        self.observed
-            .iter()
-            .map(String::as_str)
-            .filter(|line| line.starts_with("stdout: wrote: "))
-            .collect()
-    }
-
-    fn output(&self) -> String {
-        self.observed.join("\n")
-    }
-
-    fn is_running(&mut self) -> io::Result<bool> {
-        self.child.try_wait().map(|status| status.is_none())
-    }
-}
-
-impl Drop for WatchProcess {
-    fn drop(&mut self) {
-        // Still running, so end it; already gone or unknowable, so nothing to
-        // do — a test fixture cannot report a failure from `drop` anyway.
-        if let Ok(None) = self.child.try_wait() {
-            let _ = self.child.kill();
-        }
-        let _ = self.child.wait();
-    }
-}
-
-fn write_log(path: &Path) -> io::Result<String> {
-    Ok(format!("stdout: wrote: {}", path.canonicalize()?.display()))
-}
-
-fn error_log(path: &Path, diagnostic: &str) -> io::Result<String> {
-    Ok(format!(
-        "stderr: error: {}: {diagnostic}",
-        path.canonicalize()?.display()
-    ))
-}
-
 fn assert_one_write_and_running(watcher: &mut WatchProcess, context: &str) -> io::Result<()> {
     assert_eq!(watcher.writes().len(), 1, "output:\n{}", watcher.output());
     assert!(
@@ -278,24 +105,6 @@ fn assert_quiet_and_running(watcher: &mut WatchProcess, context: &str) -> io::Re
     );
     assert!(watcher.is_running()?, "watcher stopped after {context}");
     Ok(())
-}
-
-fn spawn_line_reader(
-    stream_name: &'static str,
-    stream: impl Read + Send + 'static,
-    sender: Sender<String>,
-) {
-    drop(thread::spawn(move || {
-        for result in BufReader::new(stream).lines() {
-            let line = match result {
-                Ok(line) => line,
-                Err(error) => format!("could not read {stream_name}: {error}"),
-            };
-            if sender.send(format!("{stream_name}: {line}")).is_err() {
-                break;
-            }
-        }
-    }));
 }
 
 fn build_initial_region(source_path: &Path) -> io::Result<()> {
@@ -884,19 +693,22 @@ fn watch_rejects_a_missing_root() -> io::Result<()> {
     Ok(())
 }
 
-/// Verifies explicit watch targets obey source inclusion [surface.zero-config] and [cli].
+/// Verifies explicit watch targets obey source inclusion [surface.zero-config],
+/// [typediagram.documents] and [cli].
 #[test]
-fn watch_rejects_an_explicit_non_dart_file_without_reporting_readiness() -> io::Result<()> {
+fn watch_rejects_an_explicit_unsupported_file_without_reporting_readiness() -> io::Result<()> {
     let directory = TempDirectory::create("dmx-watch-cli")?;
-    let non_dart = directory.path.join("notes.txt");
-    fs::write(&non_dart, "not Dart\n")?;
-    let output = run_watch_target_to_exit(&non_dart)?;
+    let unsupported = directory.path.join("notes.txt");
+    fs::write(&unsupported, "not a source\n")?;
+    let output = run_watch_target_to_exit(&unsupported)?;
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = failed_stderr(&output, &non_dart, "non-Dart target was accepted");
+    let stderr = failed_stderr(&output, &unsupported, "unsupported target was accepted");
 
     assert!(stdout.is_empty(), "unexpected stdout:\n{stdout}");
     assert!(
-        stderr.starts_with("error: DMX1002 [cli]: watch target is not a Dart source:"),
+        stderr.starts_with(
+            "error: DMX1002 [cli]: watch target is not a Dart source or a Markdown document:"
+        ),
         "unexpected stderr:\n{stderr}"
     );
     assert!(
@@ -914,21 +726,7 @@ fn watch_rejects_an_explicit_non_dart_file_without_reporting_readiness() -> io::
 /// the members stayed deleted no matter how often the file was saved.
 #[test]
 fn watch_regenerates_a_region_gutted_by_hand() -> io::Result<()> {
-    let mut fixture = WatchedGeneratedFixture::create()?;
-    let source_path = fixture.source_path();
-
-    let gutted = gut_generated_region(&fixture.initial_source)?;
-    assert!(
-        !gutted.contains("Map<String, dynamic> toJson()"),
-        "the fixture removed no generated members, so this proves nothing:\n{gutted}"
-    );
-    fs::write(&source_path, &gutted)?;
-
-    // Byte equality with the healthy source: every member must return, not just
-    // enough of one to satisfy a substring probe.
-    wait_for_source(&source_path, &fixture.initial_source, REGENERATION_TIMEOUT)?;
-    fixture.watcher.wait_for_write(&source_path)?;
-    assert_one_write_and_running(&mut fixture.watcher, "after repairing a gutted region")
+    watch_repairs(gut_generated_region, "after repairing a gutted region")
 }
 
 /// Verifies an emptied — but still parseable — region is refilled [execution.modes].
@@ -937,19 +735,31 @@ fn watch_regenerates_a_region_gutted_by_hand() -> io::Result<()> {
 /// keep working exactly as before.
 #[test]
 fn watch_refills_a_region_emptied_without_breaking_the_file() -> io::Result<()> {
+    watch_repairs(empty_generated_region, "after refilling an emptied region")
+}
+
+/// Damages a watched source with `damage` and proves one save brings every
+/// generated member back [emission.inline-backend.region-recovery].
+///
+/// The two tests above differ only in the damage they inflict, and what is
+/// being verified is the same sentence either way: the file that comes back is
+/// byte-for-byte the healthy one, in one write, from a watcher still running.
+fn watch_repairs(damage: fn(&str) -> io::Result<String>, context: &str) -> io::Result<()> {
     let mut fixture = WatchedGeneratedFixture::create()?;
     let source_path = fixture.source_path();
 
-    let emptied = empty_generated_region(&fixture.initial_source)?;
+    let damaged = damage(&fixture.initial_source)?;
     assert!(
-        !emptied.contains("Map<String, dynamic> toJson()"),
-        "the fixture removed no generated members:\n{emptied}"
+        !damaged.contains("Map<String, dynamic> toJson()"),
+        "the fixture removed no generated members, so this proves nothing:\n{damaged}"
     );
-    fs::write(&source_path, &emptied)?;
+    fs::write(&source_path, &damaged)?;
 
+    // Byte equality with the healthy source: every member must return, not just
+    // enough of one to satisfy a substring probe.
     wait_for_source(&source_path, &fixture.initial_source, REGENERATION_TIMEOUT)?;
     fixture.watcher.wait_for_write(&source_path)?;
-    assert_one_write_and_running(&mut fixture.watcher, "after refilling an emptied region")
+    assert_one_write_and_running(&mut fixture.watcher, context)
 }
 
 /// Verifies repair is repeatable, not a one-shot [emission.inline-backend.region-recovery].
@@ -971,6 +781,145 @@ fn watch_regenerates_a_region_gutted_twice_in_a_row() -> io::Result<()> {
         fixture.watcher.is_running()?,
         "watcher stopped after repeated repairs:\n{}",
         fixture.watcher.output()
+    );
+    Ok(())
+}
+
+/// The document every typeDiagram watch test starts from.
+const DOCUMENT: &str = r#"# Shipping
+
+```typeDiagram
+type Parcel {
+  id:      Uuid
+  weightG: Int
+}
+```
+
+```mustache {"dmx":{"output":"lib/parcel.dart"}}
+{{#declarations}}
+final class {{name}} {
+  const {{name}}({{{constructorParameters}}});
+{{#fields}}
+
+  final {{{dartType}}} {{name}};
+{{/fields}}
+}
+{{/declarations}}
+```
+"#;
+
+/// A workspace holding one `*.dmx.md` document, watched from inside it.
+struct WatchedDocument {
+    directory: TempDirectory,
+    watcher: WatchProcess,
+}
+
+impl WatchedDocument {
+    fn create() -> io::Result<Self> {
+        let directory = TempDirectory::create("dmx-watch-typediagram")?;
+        let _ = directory.write("docs/shipping.dmx.md", DOCUMENT)?;
+        fs::create_dir_all(directory.at("lib"))?;
+        let watcher = WatchProcess::spawn_ready_in(&directory.path, &["docs", "lib"])?;
+        Ok(Self { directory, watcher })
+    }
+
+    /// The generated output, which the first pass has already written.
+    fn output(&self) -> io::Result<String> {
+        fs::read_to_string(self.directory.at("lib/parcel.dart"))
+    }
+
+    /// Replaces the document, which is what a save is.
+    fn save(&self, document: &str) -> io::Result<()> {
+        let _ = self.directory.write("docs/shipping.dmx.md", document)?;
+        Ok(())
+    }
+}
+
+/// [typediagram.execution]: the first pass generates the document's outputs
+/// before the watcher reports readiness, and a saved definition regenerates
+/// them.
+#[test]
+fn watch_generates_a_document_and_regenerates_it_on_save() -> io::Result<()> {
+    let mut fixture = WatchedDocument::create()?;
+    let first = fixture.output()?;
+    assert!(first.contains("final class Parcel {"), "{first}");
+    assert!(first.contains("final int weightG;"), "{first}");
+
+    fixture.save(&DOCUMENT.replace("weightG: Int", "weightG: Float"))?;
+    fixture
+        .watcher
+        .wait_for_line_on("stdout: wrote: ", "shipping.dmx.md")?;
+
+    let second = fixture.output()?;
+    assert!(second.contains("final double weightG;"), "{second}");
+    assert!(
+        fixture.watcher.is_running()?,
+        "watcher stopped after a document save:\n{}",
+        fixture.watcher.output()
+    );
+    Ok(())
+}
+
+/// [typediagram.execution]: an invalid save keeps the last valid output, and
+/// the next valid save recovers — without the watcher exiting.
+#[test]
+fn watch_retains_the_last_valid_output_and_recovers() -> io::Result<()> {
+    let mut fixture = WatchedDocument::create()?;
+    let valid = fixture.output()?;
+
+    fixture.save(&DOCUMENT.replace("weightG: Int", "weightG:"))?;
+    fixture.watcher.wait_for_line_on("stderr: ", "DMX8004")?;
+    assert_eq!(
+        fixture.output()?,
+        valid,
+        "an invalid definition must leave the last valid output alone"
+    );
+
+    fixture.save(&DOCUMENT.replace("weightG: Int", "weightG: Bool"))?;
+    fixture
+        .watcher
+        .wait_for_line_on("stdout: wrote: ", "shipping.dmx.md")?;
+    let recovered = fixture.output()?;
+    assert!(recovered.contains("final bool weightG;"), "{recovered}");
+    assert!(
+        fixture.watcher.is_running()?,
+        "watcher stopped after recovery"
+    );
+    Ok(())
+}
+
+/// [typediagram.execution]: prose outside a generation group is not a
+/// dependency, so saving it regenerates nothing.
+#[test]
+fn watch_ignores_a_change_to_prose_outside_a_group() -> io::Result<()> {
+    let mut fixture = WatchedDocument::create()?;
+    let before = fixture.output()?;
+    // The first pass has already written once, so what a prose-only save must
+    // not do is write AGAIN.
+    let writes = fixture.watcher.writes().len();
+
+    fixture.save(&format!("{DOCUMENT}\nA paragraph somebody added.\n"))?;
+    fixture.watcher.observe_for(QUIET_PERIOD);
+
+    assert_eq!(fixture.output()?, before, "prose is not a dependency");
+    assert_eq!(
+        fixture.watcher.writes().len(),
+        writes,
+        "a prose-only save regenerated:\n{}",
+        fixture.watcher.output()
+    );
+    assert!(
+        !fixture
+            .watcher
+            .observed
+            .iter()
+            .any(|line| line.starts_with("stderr: ")),
+        "a prose-only save produced an error:\n{}",
+        fixture.watcher.output()
+    );
+    assert!(
+        fixture.watcher.is_running()?,
+        "watcher stopped after a prose-only save"
     );
     Ok(())
 }

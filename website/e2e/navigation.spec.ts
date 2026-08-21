@@ -168,6 +168,12 @@ test("shows the blog post image on the article and blog listing", async ({ page 
     ? image.naturalWidth
     : 0)).toBeGreaterThan(0);
 
+  await page.goto("/docs/models-from-a-diagram/");
+  await expect(page.getByRole("heading", { level: 1, name: "Models from a diagram" })).toBeVisible();
+  await expect(
+    page.getByText("By its name, and by nothing else", { exact: false }),
+  ).toBeVisible();
+
   await page.goto("/blog/");
   const cardImage = page.locator("main .post-list article").getByRole("img", {
     name: alt,
@@ -215,6 +221,7 @@ test("serves the TechDoc documentation and blog structure", async ({ page }) => 
     "Getting started",
     "Dart (Custom) Macros",
     "Macro catalogue",
+    "Models from a diagram",
   ]);
 
   await page.goto("/docs/dart-custom-macros/");

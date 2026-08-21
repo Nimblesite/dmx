@@ -12,32 +12,52 @@
 //! Several macros may sit on one declaration. Each contributes a fragment, and
 //! the fragments emit in the order the author wrote the annotations
 //! [rendering], into the single region that declaration owns.
+//!
+//! Not every macro is triggered by an annotation. `typeDiagram` is triggered by
+//! a generation group in a Markdown document and contributes whole files rather
+//! than a region fragment [typediagram.macro] — the same registry, resolved the
+//! same way, so a Dart-authored macro can no more shadow it than it can shadow
+//! `model`. That is the whole of the generalization: a macro is a name, an
+//! input, and a way to render.
 
 mod cli;
 mod diff;
 mod enums;
 mod fake;
 mod lerp;
-mod model;
+pub(crate) mod model;
 mod rest;
 mod route;
 mod table;
 #[cfg(test)]
 mod testing;
+mod typediagram;
 mod union;
 mod validate;
 
 use anyhow::{Context as _, Result, bail};
 
+use crate::emit::GeneratedFile;
 use crate::frontend::{Annotated, DeclKind, RawDecl, RawField};
 use crate::types::DartType;
 
-/// What every macro is: a trigger and a way to render.
+/// What triggers a macro, and what it produces.
+enum Trigger {
+    /// `@dmx('name')` on a Dart declaration; produces one region fragment
+    /// [catalogue].
+    Declaration(fn(&RawDecl, &[RawDecl]) -> Result<String>),
+    /// A generation group in a Markdown document; produces whole files
+    /// [typediagram.macro].
+    Group(fn(&crate::typediagram::Invocation<'_>) -> Result<Vec<GeneratedFile>>),
+}
+
+/// What every macro is: a name and a trigger.
 struct MacroDef {
-    /// The annotation that triggers it, without the `@`.
+    /// The name that triggers it — an annotation without the `@`, or the
+    /// built-in name a synthesized invocation resolves.
     annotation: &'static str,
-    /// Builds its context and renders its template.
-    expand: fn(&RawDecl, &[RawDecl]) -> Result<String>,
+    /// What triggers it, and how it renders.
+    trigger: Trigger,
 }
 
 /// Order here is documentation only — a declaration's fragments follow the
@@ -45,47 +65,54 @@ struct MacroDef {
 const REGISTRY: &[MacroDef] = &[
     MacroDef {
         annotation: "model",
-        expand: model::expand,
+        trigger: Trigger::Declaration(model::expand),
     },
     MacroDef {
         annotation: "union",
-        expand: union::expand,
+        trigger: Trigger::Declaration(union::expand),
     },
     MacroDef {
         annotation: "enum",
-        expand: enums::expand,
+        trigger: Trigger::Declaration(enums::expand),
     },
     MacroDef {
         annotation: "diff",
-        expand: diff::expand,
+        trigger: Trigger::Declaration(diff::expand),
     },
     MacroDef {
         annotation: "lerp",
-        expand: lerp::expand,
+        trigger: Trigger::Declaration(lerp::expand),
     },
     MacroDef {
         annotation: "validate",
-        expand: validate::expand,
+        trigger: Trigger::Declaration(validate::expand),
     },
     MacroDef {
         annotation: "table",
-        expand: table::expand,
+        trigger: Trigger::Declaration(table::expand),
     },
     MacroDef {
         annotation: "route",
-        expand: route::expand,
+        trigger: Trigger::Declaration(route::expand),
     },
     MacroDef {
         annotation: "cli",
-        expand: cli::expand,
+        trigger: Trigger::Declaration(cli::expand),
     },
     MacroDef {
         annotation: "fake",
-        expand: fake::expand,
+        trigger: Trigger::Declaration(fake::expand),
     },
     MacroDef {
         annotation: "restClient",
-        expand: rest::expand,
+        trigger: Trigger::Declaration(rest::expand),
+    },
+    // Triggered by a Markdown generation group rather than by an annotation
+    // [typediagram.macro]. It sits in this table so that resolution, shadowing
+    // rules, and diagnostics are the ones every other macro already has.
+    MacroDef {
+        annotation: "typeDiagram",
+        trigger: Trigger::Group(typediagram::expand),
     },
 ];
 
@@ -139,7 +166,17 @@ pub fn expand(
             );
         }
         if let Some(def) = REGISTRY.iter().find(|m| m.annotation == annotation.name) {
-            fragments.push((def.expand)(decl, file).with_context(|| {
+            let Trigger::Declaration(expand) = &def.trigger else {
+                // A macro this registry serves from a different trigger is not
+                // one an annotation can reach [typediagram.macro].
+                bail!(
+                    "DMX2006: `@dmx('{}')` is not an annotation; `{}` generates from a Markdown \
+                     generation group [typediagram.macro]",
+                    def.annotation,
+                    def.annotation
+                );
+            };
+            fragments.push(expand(decl, file).with_context(|| {
                 format!("DMX2100: `@dmx('{}')` on `{}`", def.annotation, decl.name)
             })?);
             continue;
@@ -169,6 +206,34 @@ pub fn is_builtin(name: &str) -> bool {
     REGISTRY.iter().any(|m| m.annotation == name)
 }
 
+/// The name the Markdown front end resolves for a generation group
+/// [typediagram.macro].
+pub const GROUP_MACRO: &str = "typeDiagram";
+
+/// Every file the built-in group macro produced for one synthesized invocation
+/// [typediagram.macro].
+///
+/// Resolution goes through [`REGISTRY`] exactly as an annotation's does, so
+/// there is one place a macro name means something and one set of rules about
+/// what may shadow it.
+///
+/// # Errors
+///
+/// Fails when the macro refuses the group, carrying its own diagnostic
+/// [typediagram.diagnostics].
+pub fn expand_group(invocation: &crate::typediagram::Invocation<'_>) -> Result<Vec<GeneratedFile>> {
+    match REGISTRY
+        .iter()
+        .find(|m| m.annotation == GROUP_MACRO)
+        .map(|def| &def.trigger)
+    {
+        Some(Trigger::Group(expand)) => expand(invocation),
+        // Both arms are unreachable while the table above holds the row, and
+        // saying so beats a panic that claims the same thing less usefully.
+        _ => bail!("DMX2000: internal error — no `{GROUP_MACRO}` macro is registered"),
+    }
+}
+
 /// Whether any macro — built-in or potentially user-defined — triggers on
 /// this declaration. Any class-level `@dmx` qualifies: an unregistered name
 /// may be served by the project's Dart worker [dartmacros.discovery], and one
@@ -190,9 +255,10 @@ pub(crate) fn application_count(declarations: &[RawDecl]) -> usize {
         .flat_map(|declaration| &declaration.annotations)
         .filter(|annotation| {
             annotation.dmx
-                && REGISTRY
-                    .iter()
-                    .any(|definition| definition.annotation == annotation.name)
+                && REGISTRY.iter().any(|definition| {
+                    definition.annotation == annotation.name
+                        && matches!(&definition.trigger, Trigger::Declaration(_))
+                })
         })
         .count()
 }
@@ -320,8 +386,8 @@ pub fn query_string(ty: &DartType, name: &str) -> String {
 /// expression instead — which is the kind of thing a template must never be
 /// asked to know [context.discipline].
 #[must_use]
-pub fn error_patterns(arity: usize) -> Vec<String> {
-    slot_patterns(arity, "Err(error: final e)")
+pub fn error_patterns(arity: usize, runtime: crate::types::Runtime) -> Vec<String> {
+    slot_patterns(arity, &format!("{}(error: final e)", runtime.name("Err")))
 }
 
 /// The record patterns that put `marker` in each slot of `arity` in turn, and

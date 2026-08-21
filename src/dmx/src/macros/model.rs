@@ -13,7 +13,7 @@ use crate::casing;
 use crate::frontend::{Annotated, DeclKind, RawDecl};
 use crate::macros::{self, Field, union};
 use crate::render;
-use crate::types::{self, DartType};
+use crate::types::{self, DartType, Runtime};
 
 /// The template this macro renders [rendering].
 const TEMPLATE: &str = include_str!("../../templates/model.mustache");
@@ -124,7 +124,7 @@ pub fn build(decl: &RawDecl, file: &[RawDecl]) -> Result<ModelCtx> {
     // The record pattern that selects each failing field, binding the error
     // payload it carries: `(_, Err(error: final e), _)`.
     let arity = fields.iter().filter(|f| f.isComplex).count();
-    let mut patterns = macros::error_patterns(arity).into_iter();
+    let mut patterns = macros::error_patterns(arity, Runtime::IN_CLASS).into_iter();
     for field in fields.iter_mut().filter(|f| f.isComplex) {
         field.errPattern = patterns.next().unwrap_or_default();
     }
@@ -175,11 +175,46 @@ pub fn json_key(field: &Field<'_>, policy: Option<&str>) -> String {
     }
 }
 
-/// Everything the template names about one field.
-fn field_context(field: &Field<'_>, other: &str, policy: Option<&str>) -> Result<FieldCtx> {
-    let (name, ty) = (field.name(), &field.ty);
+/// One field's JSON codec, both directions [model.json-codec].
+///
+/// Separate from the rest of [`FieldCtx`] because the two halves fail
+/// differently: a field always compares, hashes, and copies, and only *some*
+/// fields have a codec at all — a `void` member has none, and neither does a
+/// map keyed by anything but a string. Whole-file generation
+/// [typediagram.canonical] needs the halves apart so a declaration it cannot
+/// encode still gets its value semantics.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Codec {
+    /// Local name the pattern binds this field to.
+    pub bind: String,
+    /// What the constructor receives: the binding, or a pure transform of it.
+    pub ctor_expr: String,
+    /// The JSON key this field is read from and written to.
+    pub json_key: String,
+    /// Dart type the map pattern binds this field at — its *JSON* shape.
+    pub pattern_type: String,
+    /// Required fields are destructured by the map pattern; nullable fields are
+    /// read with `dmxKey` so that an absent key decodes as null.
+    pub in_pattern: bool,
+    /// Contributes a `Result` to the record that sequences the decode.
+    pub is_complex: bool,
+    /// The `Result` this entry contributes.
+    pub result_expr: String,
+    /// This entry on the way out.
+    pub encode_expr: String,
+}
+
+/// One field's codec, in whichever direction the generated code reaches a
+/// declared type's decoder from [model.json-codec].
+///
+/// `key` is the JSON key as a Dart string literal, quotes included.
+///
+/// # Errors
+///
+/// Fails when the type has no codec — the same refusal [`types::decode_bound`]
+/// makes, reported against the field that asked for it.
+pub fn codec(name: &str, ty: &DartType, key: String, runtime: Runtime) -> Result<Codec> {
     let bind = macros::binding_name(name);
-    let key = json_key(field, policy);
     // Interpolated, not baked: a nested failure reports the path it was reached
     // by — `Order.lines[2].product` — rather than the type it happened in. The
     // path names the *wire* key, because that is what the payload in front of
@@ -194,40 +229,59 @@ fn field_context(field: &Field<'_>, other: &str, policy: Option<&str>) -> Result
     } else if ty.nullable {
         let inner = ty.non_null();
         format!(
-            "dmxNullable<{}>(dmxKey(json, {key}), {path}, {})",
+            "{}<{}>({}(json, {key}), {path}, {})",
+            runtime.name("dmxNullable"),
             inner.source,
-            types::decoder(&inner, 12)?
+            runtime.name("dmxKey"),
+            types::decoder(&inner, 12, runtime)?
         )
     } else {
-        types::decode_bound(ty, &bind, &path, 12)?
+        types::decode_bound(ty, &bind, &path, 12, runtime)?
     };
 
-    Ok(FieldCtx {
-        patternType: if ty.nullable {
+    Ok(Codec {
+        pattern_type: if ty.nullable {
             String::new()
         } else {
             types::json_shape(ty)
         },
-        inPattern: !ty.nullable,
-        isComplex: !direct,
-        resultExpr: result_expr,
-        errPattern: String::new(), // arity is only known once all fields are in
-        encodeExpr: types::encode(ty, name, 0),
-        equalsExpr: comparison(ty, other, name, true),
-        hashExpr: hash_component(ty, name),
-        copyParam: copy_param(ty, name),
-        copyArg: copy_arg(ty, name),
-        toStringExpr: format!("{name}: ${name}"),
+        in_pattern: !ty.nullable,
+        is_complex: !direct,
+        result_expr,
+        encode_expr: types::encode(ty, name, 0),
         // Direct fields carry their transform into the constructor call;
         // everything else arrives already decoded, bound by the record pattern.
-        ctorExpr: if direct {
+        ctor_expr: if direct {
             types::pure_transform(ty, &bind).unwrap_or_else(|| bind.clone())
         } else {
             bind.clone()
         },
-        jsonKey: key,
-        name: name.to_owned(),
+        json_key: key,
         bind,
+    })
+}
+
+/// Everything the template names about one field.
+fn field_context(field: &Field<'_>, other: &str, policy: Option<&str>) -> Result<FieldCtx> {
+    let (name, ty) = (field.name(), &field.ty);
+    let codec = self::codec(name, ty, json_key(field, policy), Runtime::IN_CLASS)?;
+
+    Ok(FieldCtx {
+        patternType: codec.pattern_type,
+        inPattern: codec.in_pattern,
+        isComplex: codec.is_complex,
+        resultExpr: codec.result_expr,
+        errPattern: String::new(), // arity is only known once all fields are in
+        encodeExpr: codec.encode_expr,
+        equalsExpr: comparison(ty, other, name, true, Runtime::IN_CLASS),
+        hashExpr: hash_component(ty, name, Runtime::IN_CLASS),
+        copyParam: copy_param(ty, name, Runtime::IN_CLASS),
+        copyArg: copy_arg(ty, name, Runtime::IN_CLASS),
+        toStringExpr: format!("{name}: ${name}"),
+        ctorExpr: codec.ctor_expr,
+        jsonKey: codec.json_key,
+        name: name.to_owned(),
+        bind: codec.bind,
         isLast: false,
     })
 }
@@ -236,19 +290,20 @@ fn field_context(field: &Field<'_>, other: &str, policy: Option<&str>) -> Result
 ///
 /// `equal` picks the sense. `@dmx('diff')` asks for the negation rather than forming
 /// its own opinion, so "changed" and "unequal" can never drift apart.
-pub fn comparison(ty: &DartType, other: &str, name: &str, equal: bool) -> String {
+pub fn comparison(ty: &DartType, other: &str, name: &str, equal: bool, runtime: Runtime) -> String {
+    let deep = runtime.name("dmxDeepEquals");
     match (ty.is_collection(), equal) {
-        (true, true) => format!("dmxDeepEquals({other}.{name}, {name})"),
-        (true, false) => format!("!dmxDeepEquals({other}.{name}, {name})"),
+        (true, true) => format!("{deep}({other}.{name}, {name})"),
+        (true, false) => format!("!{deep}({other}.{name}, {name})"),
         (false, true) => format!("{other}.{name} == {name}"),
         (false, false) => format!("{other}.{name} != {name}"),
     }
 }
 
 /// [model.equality]: a hash consistent with [`comparison`].
-pub fn hash_component(ty: &DartType, name: &str) -> String {
+pub fn hash_component(ty: &DartType, name: &str, runtime: Runtime) -> String {
     if ty.is_collection() {
-        format!("dmxDeepHash({name})")
+        format!("{}({name})", runtime.name("dmxDeepHash"))
     } else {
         name.to_owned()
     }
@@ -256,20 +311,29 @@ pub fn hash_component(ty: &DartType, name: &str) -> String {
 
 /// [model.copywith]: a nullable field takes a patch, so omitting it and
 /// clearing it are different calls; everything else takes `T?` and `??`.
-fn copy_param(ty: &DartType, name: &str) -> String {
+#[must_use]
+pub fn copy_param(ty: &DartType, name: &str, runtime: Runtime) -> String {
     if ty.nullable {
-        format!("DmxPatch<{}> {name} = const DmxKeep()", ty.source)
+        format!(
+            "{}<{}> {name} = const {}()",
+            runtime.name("DmxPatch"),
+            ty.source,
+            runtime.name("DmxKeep")
+        )
     } else {
         format!("{}? {name}", ty.source)
     }
 }
 
 /// [model.copywith]: what `copyWith` passes on for one field.
-fn copy_arg(ty: &DartType, name: &str) -> String {
+#[must_use]
+pub fn copy_arg(ty: &DartType, name: &str, runtime: Runtime) -> String {
     if ty.nullable {
         format!(
             "{name}: switch ({name}) {{ \
-             DmxKeep() => this.{name}, DmxTo(value: final value) => value }}"
+             {}() => this.{name}, {}(value: final value) => value }}",
+            runtime.name("DmxKeep"),
+            runtime.name("DmxTo")
         )
     } else {
         format!("{name}: {name} ?? this.{name}")

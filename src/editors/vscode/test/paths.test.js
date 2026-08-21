@@ -11,7 +11,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { test } = require('node:test');
-const { packageLibraries, watchTargets } = require('../paths.js');
+const { packageLibraries, sources, watchTargets } = require('../paths.js');
 
 /// A throwaway workspace holding `directories`, each made a package when its
 /// entry says so.
@@ -91,4 +91,62 @@ test('a pubspec without lib is not a package to generate into', () => {
   fs.writeFileSync(path.join(root, 'tool', 'pubspec.yaml'), 'name: tool\n');
 
   assert.deepEqual(packageLibraries(root), []);
+});
+
+/// A workspace holding `files`, each written with placeholder content.
+function withFiles(layout, files) {
+  const root = workspace(layout);
+  for (const relative of files) {
+    const target = path.join(root, relative);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, '# a document\n');
+  }
+  return root;
+}
+
+test('every definition and document is watched, wherever it lives', () => {
+  const root = withFiles({ 'packages/store': true, docs: false, models: false }, [
+    'models.dmx.md',
+    'docs/shipping.dmx.md',
+    'models/shipping.td',
+    'models/shipping.mustache',
+    'packages/store/docs/store.dmx.md',
+    'docs/README.md',
+    'packages/store/lib/notes.md',
+  ]);
+
+  assert.deepEqual(sources(root), [
+    path.join('docs', 'shipping.dmx.md'),
+    path.join('models', 'shipping.td'),
+    'models.dmx.md',
+    path.join('packages', 'store', 'docs', 'store.dmx.md'),
+  ]);
+
+  const targets = watchTargets(root, ['lib'], false);
+  assert.ok(targets.includes(path.join('packages', 'store', 'lib')), targets.join(', '));
+  assert.ok(targets.includes(path.join('docs', 'shipping.dmx.md')), targets.join(', '));
+  assert.ok(targets.includes(path.join('models', 'shipping.td')), targets.join(', '));
+  // A template is watched by the binary, through the definition beside it —
+  // naming it here would watch it twice and generate from it never.
+  assert.ok(!targets.includes(path.join('models', 'shipping.mustache')), targets.join(', '));
+  assert.ok(!targets.includes(path.join('docs', 'README.md')), targets.join(', '));
+});
+
+test('build output and hidden directories hold no sources worth watching', () => {
+  const root = withFiles({ build: false, node_modules: false, '.git': false }, [
+    'build/generated.dmx.md',
+    'node_modules/pkg/thing.td',
+    '.git/stash.dmx.md',
+    'kept.dmx.md',
+    'kept.td',
+  ]);
+  assert.deepEqual(sources(root), ['kept.dmx.md', 'kept.td']);
+});
+
+test('explicit paths are honoured exactly, sources included or not', () => {
+  const root = withFiles({ docs: false }, ['docs/shipping.dmx.md']);
+  assert.deepEqual(watchTargets(root, [path.join('docs', 'shipping.dmx.md')], true), [
+    path.join('docs', 'shipping.dmx.md'),
+  ]);
+  assert.deepEqual(watchTargets(root, ['lib'], true), []);
 });

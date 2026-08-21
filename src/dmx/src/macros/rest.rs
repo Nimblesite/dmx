@@ -310,7 +310,13 @@ fn decode(ty: &DartType, method: &str) -> Result<String> {
     Ok(format!(
         "switch (response.body) {{ final {shape} body => {bound},          _ => Err<{source}, DecodeError>(DecodeError('{method}', '{source}', response.body)) }}",
         shape = types::json_shape(ty),
-        bound = types::decode_bound(ty, "body", &format!("'{method}'"), 12)?,
+        bound = types::decode_bound(
+            ty,
+            "body",
+            &format!("'{method}'"),
+            12,
+            types::Runtime::IN_CLASS
+        )?,
         source = ty.source,
     ))
 }

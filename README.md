@@ -111,6 +111,77 @@ built-ins use. Two worked examples do exactly that: one reads a live
 [SQLite database](examples/dmx_sqlite_example/README.md), one reads an
 [OpenAPI document](examples/dmx_openapi_example/README.md).
 
+**Models defined by a diagram.** Some types have no Dart file to annotate yet.
+Write the model once as a [typeDiagram](https://typediagram.dev/docs/)
+definition and save:
+
+```text
+models/parcel.td          the definition
+lib/parcel.dart           what dmx writes
+```
+
+```typeDiagram
+type Parcel {
+  id:      Uuid
+  weightG: Int
+  insured: Option<Decimal>
+}
+```
+
+```dart
+final class Parcel {
+  const Parcel({required this.id, required this.weightG, this.insured});
+
+  final String id;
+  final int weightG;
+  final String? insured;
+
+  @override
+  bool operator ==(Object other) => /* every field, collections by content */;
+
+  @override
+  int get hashCode => Object.hash(runtimeType, id, weightG, insured);
+
+  Parcel copyWith({String? id, int? weightG, dmx.DmxPatch<String?> insured});
+}
+
+/// JSON for [Parcel].
+extension ParcelJson on Parcel {
+  static dmx.Result<Parcel, dmx.DecodeError> fromJson(Object? json, [String path = 'Parcel']);
+  Map<String, Object?> toJson();
+}
+```
+
+Nothing is embedded in anything: the `.td` is what any typeDiagram tool reads,
+and `lib/parcel.dart` is one complete Dart file, relative to the package the
+definition belongs to. The class is an immutable value — it compares by value,
+hashes consistently with that comparison, and copies — and its JSON lives on an
+extension beside it rather than inside it, so the class reads as what the
+diagram said and nothing else. That is the **canonical model template** dmx
+ships: one template, and every model class comes out of it.
+
+To decide the shape yourself, put `parcel.mustache` beside `parcel.td` and it
+takes the canonical template's place. Any other template beside the definition
+is an extra output, bound by its name — the
+[shipping example](examples/storefront/models/README.md) defines four types once
+and generates two different Dart files from them. dmx reads the definition
+itself — no Node, no npm package, no `typediagram` executable.
+
+The definition and its templates can also live inside one `*.dmx.md` document,
+when the model, the diagram, and the prose explaining them belong on one page:
+
+````markdown
+```typeDiagram
+type Parcel {
+  id: Uuid
+}
+```
+
+```mustache {"dmx":{"output":"lib/parcel.dart"}}
+{{#declarations}}final class {{name}} {}{{/declarations}}
+```
+````
+
 **It never writes broken Dart.**
 
 | Guarantee | Mechanism |
@@ -120,17 +191,24 @@ built-ins use. Two worked examples do exactly that: one reads a live
 | Leaves labelled folds alone | Only the bare, unlabelled `//#region` block is machine-owned |
 | Repairs a region you gutted | dmx empties the region, re-parses, and regenerates [emission.inline-backend.region-recovery] |
 | Zero writes when nothing changed | Byte-compare before write [emission.inline-backend.no-op-writes] |
-| Generated code obeys the house rules | No `throw`, `as`, `!` or `_$` names — asserted over the whole golden corpus |
+| Generated code obeys the house rules | No `throw`, `as`, `!` or `_$` names — asserted over the whole golden corpus, and enforced on the CST for templates dmx did not write [hygiene] |
+| Never overwrites a file it does not own | A generated file carries an ownership marker on its first line; anything without one is yours [dartmacros.files] |
 
 ## CLI
 
 ```
-dmx build [PATHS...] [--insert-regions] [--check]
-dmx watch [PATHS...]
+dmx build   [PATHS...] [--insert-regions] [--check]
+dmx watch   [PATHS...]
+dmx explain FILE
 ```
 
-Both default to `lib`. `watch` regenerates changed `.dart` files and debounces
-save bursts. `--check` writes nothing and exits 2 on drift, for CI.
+`build` and `watch` default to `lib`. Both take Dart sources, `*.td` definitions
+and `*.dmx.md` documents found under the paths given, and any Markdown file named
+explicitly. `watch` regenerates what changed — including when you edit a
+`.mustache` file beside a definition — and debounces save bursts. `--check`
+writes nothing and exits 2 on drift, for CI. `dmx explain models/parcel.td`
+prints each generation group, its outputs, its dependency digests, and the exact
+context its templates will see — without generating anything.
 
 ## Working on dmx
 

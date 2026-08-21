@@ -1,0 +1,6 @@
+name: dmx_typediagram_golden
+publish_to: none
+environment:
+  sdk: ^3.6.0
+dependencies:
+  dmx: ^0.3.0

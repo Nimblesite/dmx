@@ -1,0 +1,173 @@
+{
+  "version": 1,
+  "decls": [
+    {
+      "kind": "record",
+      "name": "User",
+      "generics": [],
+      "fields": [
+        {
+          "name": "id",
+          "type": {
+            "name": "Uuid",
+            "args": []
+          }
+        },
+        {
+          "name": "name",
+          "type": {
+            "name": "String",
+            "args": []
+          }
+        },
+        {
+          "name": "email",
+          "type": {
+            "name": "Option",
+            "args": [
+              {
+                "name": "Email",
+                "args": []
+              }
+            ]
+          }
+        },
+        {
+          "name": "roles",
+          "type": {
+            "name": "List",
+            "args": [
+              {
+                "name": "Role",
+                "args": []
+              }
+            ]
+          }
+        },
+        {
+          "name": "address",
+          "type": {
+            "name": "Address",
+            "args": []
+          }
+        }
+      ]
+    },
+    {
+      "kind": "record",
+      "name": "Pair",
+      "generics": [
+        "A",
+        "B"
+      ],
+      "fields": [
+        {
+          "name": "first",
+          "type": {
+            "name": "A",
+            "args": []
+          }
+        },
+        {
+          "name": "second",
+          "type": {
+            "name": "B",
+            "args": []
+          }
+        }
+      ]
+    },
+    {
+      "kind": "record",
+      "name": "Box",
+      "generics": [
+        "T"
+      ],
+      "fields": [
+        {
+          "name": "value",
+          "type": {
+            "name": "T",
+            "args": []
+          }
+        }
+      ]
+    },
+    {
+      "kind": "record",
+      "name": "Empty",
+      "generics": [],
+      "fields": []
+    },
+    {
+      "kind": "record",
+      "name": "Separators",
+      "generics": [],
+      "fields": [
+        {
+          "name": "a",
+          "type": {
+            "name": "Int",
+            "args": []
+          }
+        },
+        {
+          "name": "b",
+          "type": {
+            "name": "Int",
+            "args": []
+          }
+        },
+        {
+          "name": "c",
+          "type": {
+            "name": "Int",
+            "args": []
+          }
+        }
+      ]
+    },
+    {
+      "kind": "record",
+      "name": "Email",
+      "generics": [],
+      "fields": [
+        {
+          "name": "text",
+          "type": {
+            "name": "String",
+            "args": []
+          }
+        }
+      ]
+    },
+    {
+      "kind": "record",
+      "name": "Role",
+      "generics": [],
+      "fields": [
+        {
+          "name": "name",
+          "type": {
+            "name": "String",
+            "args": []
+          }
+        }
+      ]
+    },
+    {
+      "kind": "record",
+      "name": "Address",
+      "generics": [],
+      "fields": [
+        {
+          "name": "line",
+          "type": {
+            "name": "String",
+            "args": []
+          }
+        }
+      ]
+    }
+  ]
+}

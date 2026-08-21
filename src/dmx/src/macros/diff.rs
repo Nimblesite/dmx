@@ -62,7 +62,13 @@ fn build(decl: &RawDecl) -> Result<DiffCtx> {
     let fields = macros::typed_fields(decl)?
         .iter()
         .map(|field| FieldCtx {
-            differs: model::comparison(&field.ty, &other, field.name(), false),
+            differs: model::comparison(
+                &field.ty,
+                &other,
+                field.name(),
+                false,
+                crate::types::Runtime::IN_CLASS,
+            ),
             key: model::json_key(field, policy.as_deref()),
             name: field.name().to_owned(),
         })
