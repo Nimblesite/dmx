@@ -4,13 +4,20 @@
 
 [defaults]
 # Generator OUTPUT, not authored code. Hidden from the report, still analysed,
-# so a cluster with one hand-written member survives.
+# so a cluster with one hand-written member survives. Every directory here is
+# one `make golden` / `make example` rewrites and AGENTS.md forbids editing by
+# hand: its shape is decided by a template, and the template IS analysed.
 report_hide = [
   "examples/storefront/lib/**",
   "examples/dmx_sqlite_example/lib/**",
   "examples/dmx_openapi_example/lib/**",
   "src/dmx/tests/golden/**",
+  "src/dmx/tests/typediagram/golden/lib/**",
 ]
 
 [threshold]
-max_duplication_percent = 7.0
+# 0.5.1 is not bit-deterministic: three runs over an unchanged tree measured
+# 6.36%, 6.59% and 6.60%. The budget carries headroom over the worst of those,
+# so ratchet DOWN in steps that leave some — a gate that flakes red is a gate
+# people learn to re-run.
+max_duplication_percent = 6.8

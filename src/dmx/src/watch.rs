@@ -1,12 +1,15 @@
 //! Debounced, incremental file watching for `dmx watch` [execution.modes].
+//!
+//! What counts as a source, and where one is found, is [`crate::sources`].
+//! This module is the loop: register the scopes, batch the events a burst
+//! produces, decide what each event stands for, and regenerate.
 
 use anyhow::{Context as _, Result, bail};
 use lspkit::{EngineApi as _, Progress, RescanScope};
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::collections::{BTreeMap, BTreeSet};
-use std::ffi::OsStr;
 use std::io::{self, Write as _};
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::time::{Duration, Instant};
 use tokio::runtime::Runtime;
@@ -14,236 +17,10 @@ use tokio_util::sync::CancellationToken;
 
 use crate::Options;
 use crate::engine::{Engine, FileOutcome, Pass, Query};
+use crate::sources::{Scope, Sweep, collect_path};
 
 /// How long a save burst is allowed to keep arriving before it is answered.
 const DEBOUNCE: Duration = Duration::from_millis(150);
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-/// What one watch argument turned out to be.
-enum Scope {
-    /// A directory, watched recursively.
-    Directory(PathBuf),
-    /// One Dart source, watched through its parent directory.
-    File(PathBuf),
-}
-
-impl Scope {
-    /// Resolves one command-line path, refusing what cannot be watched.
-    fn from_path(path: &Path) -> Result<Self> {
-        let absolute = path
-            .canonicalize()
-            .with_context(|| format!("DMX1002 [cli]: cannot watch {}", path.display()))?;
-        match (absolute.is_dir(), absolute.is_file()) {
-            (true, false) => Ok(Self::Directory(absolute)),
-            (false, true) if Sweep::Sources.wants_named(&absolute) => Ok(Self::File(absolute)),
-            (false, true) => bail!(
-                "DMX1002 [cli]: watch target is not a Dart source or a Markdown document: {}",
-                path.display()
-            ),
-            _ => bail!(
-                "DMX1002 [cli]: watch target is not a file or directory: {}",
-                path.display()
-            ),
-        }
-    }
-
-    /// Whether this scope's tree contains `path`, by name alone.
-    ///
-    /// Nothing here touches the filesystem: it answers where a path sits, and
-    /// the callers below add what it has to BE.
-    fn contains(&self, path: &Path) -> bool {
-        match self {
-            Self::File(file) => path == file,
-            Self::Directory(directory) => path
-                .strip_prefix(directory)
-                .is_ok_and(|relative| relative.components().all(visible_component)),
-        }
-    }
-
-    /// Whether an event about this path is one this scope wants.
-    fn accepts(&self, path: &Path) -> bool {
-        let named = matches!(self, Self::File(file) if file == path);
-        // Recursive discovery takes `*.dmx.md`; a Markdown file named directly
-        // is watched whatever it is called [typediagram.documents].
-        let wanted = if named {
-            Sweep::Sources.wants_named(path)
-        } else {
-            Sweep::Sources.wants(path)
-        };
-        !path.is_symlink() && path.is_file() && wanted && self.contains(path)
-    }
-
-    /// Whether `path` is a directory inside this scope's tree.
-    ///
-    /// A directory that appears inside a watched tree can already hold sources
-    /// whose own creation events never arrive. A recursive watch on Linux is
-    /// one inotify registration per directory, added when the directory is
-    /// seen, so anything written into a new directory before that registration
-    /// lands is never announced. macOS reports a whole tree from a single
-    /// registration and never shows this, which is why it has to be handled
-    /// here rather than left to whichever platform notices first
-    /// [execution.modes].
-    fn covers_directory(&self, path: &Path) -> bool {
-        matches!(self, Self::Directory(_))
-            && !path.is_symlink()
-            && path.is_dir()
-            && self.contains(path)
-    }
-
-    /// The canonical path this scope covers, which is what the engine rescans.
-    fn root(&self) -> PathBuf {
-        match self {
-            Self::Directory(path) | Self::File(path) => path.clone(),
-        }
-    }
-
-    /// The path to register with the watcher, and how deeply.
-    fn registration(&self) -> Result<(PathBuf, RecursiveMode)> {
-        match self {
-            Self::Directory(path) => Ok((path.clone(), RecursiveMode::Recursive)),
-            Self::File(path) => path
-                .parent()
-                .map(|parent| (parent.to_owned(), RecursiveMode::NonRecursive))
-                .ok_or_else(|| {
-                    anyhow::anyhow!("DMX1002 [cli]: {} has no parent directory", path.display())
-                }),
-        }
-    }
-}
-
-/// What one sweep of the tree is looking for.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum Sweep {
-    /// Everything dmx generates from: Dart files and Markdown documents.
-    Sources,
-    /// Anything carrying an extension some generation target writes — the
-    /// candidates a generated output could be hiding among when a pass
-    /// collects what it no longer produces [typediagram.output].
-    Outputs,
-}
-
-impl Sweep {
-    /// Whether a file *recursive discovery* found is one this sweep wants.
-    fn wants(self, path: &Path) -> bool {
-        match self {
-            Self::Sources => is_dart_source(path) || crate::typediagram::is_document(path),
-            Self::Outputs => crate::typediagram::target::extensions()
-                .any(|extension| has_extension(path, extension)),
-        }
-    }
-
-    /// Whether a file *named directly* is one this sweep wants.
-    ///
-    /// The two differ in exactly one place: recursive discovery takes
-    /// `*.dmx.md` and nothing else, and naming a Markdown file is how any
-    /// other one is generated from [typediagram.documents].
-    fn wants_named(self, path: &Path) -> bool {
-        self.wants(path) || (self == Self::Sources && crate::typediagram::is_markdown(path))
-    }
-}
-
-/// Every source dmx generates from at or under `paths` — Dart files and
-/// Markdown documents alike [surface.zero-config], [typediagram.documents].
-///
-/// # Errors
-///
-/// Fails when a directory cannot be read.
-pub fn collect_sources(paths: &[PathBuf]) -> Result<Vec<PathBuf>> {
-    collect(paths, Sweep::Sources)
-}
-
-/// Every file at or under `paths` that some generation target could have
-/// written [typediagram.output].
-///
-/// # Errors
-///
-/// Fails when a directory cannot be read.
-pub fn collect_outputs(paths: &[PathBuf]) -> Result<Vec<PathBuf>> {
-    collect(paths, Sweep::Outputs)
-}
-
-/// Every file `sweep` accepts at or under `paths`, deduplicated and ordered.
-fn collect(paths: &[PathBuf], sweep: Sweep) -> Result<Vec<PathBuf>> {
-    paths
-        .iter()
-        .map(|path| collect_path(path, sweep, Sweep::wants_named))
-        .collect::<Result<Vec<_>>>()
-        .map(|groups| {
-            groups
-                .into_iter()
-                .flatten()
-                .collect::<BTreeSet<_>>()
-                .into_iter()
-                .collect()
-        })
-}
-
-/// Every source at or under one path, with `accept` deciding what a *file*
-/// there has to be — which differs between a path somebody named and one
-/// discovery walked into.
-fn collect_path(
-    path: &Path,
-    sweep: Sweep,
-    accept: fn(Sweep, &Path) -> bool,
-) -> Result<Vec<PathBuf>> {
-    match (path.is_symlink(), path.is_dir(), path.is_file()) {
-        (false, true, _) => collect_directory(path, sweep),
-        (false, false, true) if accept(sweep, path) => Ok(vec![path.to_owned()]),
-        // A symlink is never followed [surface.zero-config], and anything that
-        // is not a source is not dmx's to read.
-        _ => Ok(Vec::new()),
-    }
-}
-
-/// Every source under one directory, hidden entries excluded.
-fn collect_directory(directory: &Path, sweep: Sweep) -> Result<Vec<PathBuf>> {
-    std::fs::read_dir(directory)
-        .with_context(|| {
-            format!(
-                "DMX1002 [surface.zero-config]: cannot read {}",
-                directory.display()
-            )
-        })?
-        .filter_map(|entry| match entry {
-            Ok(entry) if visible_name(&entry.file_name()) => {
-                Some(collect_path(&entry.path(), sweep, Sweep::wants))
-            }
-            Ok(_) => None,
-            Err(error) => Some(Err(anyhow::Error::from(error).context(format!(
-                "DMX1002 [surface.zero-config]: cannot inspect {}",
-                directory.display()
-            )))),
-        })
-        .collect::<Result<Vec<_>>>()
-        .map(|groups| groups.into_iter().flatten().collect())
-}
-
-/// A Dart source dmx owns — not a `.g.dart` somebody else generates.
-fn is_dart_source(path: &Path) -> bool {
-    has_extension(path, "dart")
-        && path
-            .file_name()
-            .is_some_and(|name| !name.to_string_lossy().ends_with(".g.dart"))
-}
-
-/// Whether `path` carries `extension`, however it is cased.
-fn has_extension(path: &Path, extension: &str) -> bool {
-    path.extension()
-        .is_some_and(|found| found.eq_ignore_ascii_case(extension))
-}
-
-/// Whether a directory entry is one the zero-config rules look at.
-fn visible_name(name: &OsStr) -> bool {
-    !name.to_string_lossy().starts_with('.')
-}
-
-/// The same rule, applied to one component of a relative path.
-fn visible_component(component: Component<'_>) -> bool {
-    match component {
-        Component::Normal(name) => visible_name(name),
-        _ => true,
-    }
-}
 
 /// Runs the debounced, incremental watch execution mode [execution.modes], [cli].
 ///
@@ -484,6 +261,10 @@ fn resolve(path: &Path) -> Option<PathBuf> {
 /// its first line names that seed [dartmacros.files]. Editing generated code
 /// re-runs what generates it, which is the only way an edit there can be
 /// answered — the generated file has no annotation of its own.
+///
+/// A Mustache template stands for its definition and NOT for itself: nothing
+/// is ever generated from a `.mustache` file, so a pass that named one would
+/// report writing a file it did not write [typediagram.standalone].
 fn claim(path: &Path, scopes: &[Scope]) -> Batch {
     let named = BTreeSet::from([path.to_owned()]);
     match (
@@ -491,10 +272,13 @@ fn claim(path: &Path, scopes: &[Scope]) -> Batch {
         scopes.iter().any(|scope| scope.covers_directory(path)),
     ) {
         (true, _) => Batch {
-            sources: named
-                .into_iter()
-                .chain(crate::emit::seed_of(path))
-                .collect(),
+            sources: match crate::typediagram::definition_of(path) {
+                Some(definition) => BTreeSet::from([definition]),
+                None => named
+                    .into_iter()
+                    .chain(crate::emit::seed_of(path))
+                    .collect(),
+            },
             ..Batch::default()
         },
         (false, true) => Batch {
@@ -514,7 +298,7 @@ fn claim(path: &Path, scopes: &[Scope]) -> Batch {
 /// A missing source against the watched directory it was in.
 fn vanished_in(path: &Path, scopes: &[Scope]) -> Option<(PathBuf, PathBuf)> {
     let parent = Sweep::Sources
-        .wants(path)
+        .watches(path)
         .then(|| path.parent())
         .flatten()?;
     scopes
@@ -561,7 +345,7 @@ fn announce(pass: &Pass) {
     }
 }
 
-// A separate file only because watch.rs is near the 500-line ceiling.
+// A separate file only because the loop and its tests together are long.
 #[cfg(test)]
 #[path = "watch_tests.rs"]
 mod tests;

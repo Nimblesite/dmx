@@ -19,7 +19,7 @@ use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::{Stream, StreamExt as _};
 use tokio_util::sync::CancellationToken;
 
-use crate::watch::collect_sources;
+use crate::sources::collect_sources;
 use crate::{Options, Outcome, process_path};
 
 /// Generation events a slow subscriber may fall behind by before it starts

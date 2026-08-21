@@ -22,11 +22,13 @@
 
 mod support;
 
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+#[path = "support/workspace.rs"]
+mod workspace;
 
-use support::TempDirectory;
+use std::fs;
+use std::process::Command;
+
+use workspace::Workspace;
 
 /// A record definition and one template over it — the canonical document.
 const STORE: &str = r#"# Store models
@@ -90,86 +92,20 @@ const declaredNames = <String>[
 That is the whole document.
 "#;
 
-/// A workspace with `docs/store.dmx.md` in it, plus whatever else a test adds.
-struct Workspace {
-    /// The scratch directory, removed when the test ends.
-    directory: TempDirectory,
-}
-
-impl Workspace {
-    /// A workspace holding one document at `docs/store.dmx.md`.
-    fn with(document: &str) -> Self {
-        let directory = TempDirectory::create("dmx-typediagram").expect("scratch directory");
-        fs::create_dir_all(directory.at("lib")).expect("lib directory");
-        let _ = directory
-            .write("docs/store.dmx.md", document)
-            .expect("write the document");
-        Self { directory }
-    }
-
-    /// The workspace root.
-    fn root(&self) -> &Path {
-        &self.directory.path
-    }
-
-    /// One path inside it.
-    fn path(&self, relative: &str) -> PathBuf {
-        self.directory.at(relative)
-    }
-
-    /// The contents of one file inside it.
-    fn read(&self, relative: &str) -> String {
-        fs::read_to_string(self.path(relative))
-            .unwrap_or_else(|e| panic!("cannot read {relative}: {e}"))
-    }
-
-    /// Whether one path inside it exists.
-    fn exists(&self, relative: &str) -> bool {
-        self.path(relative).exists()
-    }
-
-    /// Writes one file inside it, creating the directories it needs.
-    fn write(&self, relative: &str, contents: &str) {
-        let _ = self.directory.write(relative, contents).expect("write");
-    }
-
-    /// Runs `dmx` from the workspace root, as a shell in it would.
-    fn dmx(&self, args: &[&str]) -> Output {
-        Command::new(env!("CARGO_BIN_EXE_dmx"))
-            .args(args)
-            .current_dir(self.root())
-            .output()
-            .expect("run dmx")
-    }
-
-    /// Runs `dmx build docs lib` and requires it to succeed.
-    fn build(&self) -> String {
-        let output = self.dmx(&["build", "docs", "lib"]);
-        assert!(
-            output.status.success(),
-            "build failed:\n{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        String::from_utf8_lossy(&output.stdout).into_owned()
-    }
-
-    /// Runs `dmx build docs lib` and requires it to fail, returning stderr.
-    fn build_failure(&self) -> String {
-        let output = self.dmx(&["build", "docs", "lib"]);
-        assert!(
-            !output.status.success(),
-            "build should have failed; stdout:\n{}",
-            String::from_utf8_lossy(&output.stdout)
-        );
-        String::from_utf8_lossy(&output.stderr).into_owned()
-    }
+/// A workspace holding one document at `docs/store.dmx.md`.
+fn document_workspace(document: &str) -> Workspace {
+    Workspace::create(
+        "dmx-typediagram",
+        &["build", "docs", "lib"],
+        &[("docs/store.dmx.md", document)],
+    )
 }
 
 /// [typediagram.execution]: one document, two templates, two owned files —
 /// and a second build that writes nothing.
 #[test]
 fn a_document_generates_every_bound_template_once() {
-    let workspace = Workspace::with(STORE);
+    let workspace = document_workspace(STORE);
 
     let first = workspace.build();
     assert!(first.contains("wrote: docs/store.dmx.md"), "{first}");
@@ -214,9 +150,9 @@ fn a_document_generates_every_bound_template_once() {
 /// produces the same bytes from a clean workspace every time.
 #[test]
 fn generation_is_byte_identical_across_workspaces() {
-    let first = Workspace::with(STORE);
+    let first = document_workspace(STORE);
     let _ = first.build();
-    let second = Workspace::with(STORE);
+    let second = document_workspace(STORE);
     let _ = second.build();
     assert_eq!(
         first.read("lib/models.dart"),
@@ -229,7 +165,7 @@ fn generation_is_byte_identical_across_workspaces() {
 /// document still is not rewritten.
 #[test]
 fn a_crlf_document_generates_the_same_model() {
-    let workspace = Workspace::with(&STORE.replace('\n', "\r\n"));
+    let workspace = document_workspace(&STORE.replace('\n', "\r\n"));
     let _ = workspace.build();
     assert!(
         workspace
@@ -243,7 +179,7 @@ fn a_crlf_document_generates_the_same_model() {
 /// nothing; once the outputs are current it exits 0.
 #[test]
 fn check_reports_drift_and_writes_nothing() {
-    let workspace = Workspace::with(STORE);
+    let workspace = document_workspace(STORE);
 
     let drift = workspace.dmx(&["build", "docs", "lib", "--check"]);
     assert_eq!(drift.status.code(), Some(2), "drift must exit 2");
@@ -263,7 +199,7 @@ fn check_reports_drift_and_writes_nothing() {
 /// Markdown file is documentation until somebody names it.
 #[test]
 fn other_markdown_is_documentation_until_it_is_named() {
-    let workspace = Workspace::with(STORE);
+    let workspace = document_workspace(STORE);
     workspace.write(
         "docs/notes.md",
         "```typeDiagram\ntype Note { body: String }\n```\n\n```mustache {\"dmx\":{\"output\":\"lib/notes.dart\"}}\n// {{#declarations}}{{name}}{{/declarations}}\n```\n",
@@ -288,7 +224,7 @@ fn other_markdown_is_documentation_until_it_is_named() {
 /// no dmx metadata, and an unrelated fence all generate nothing.
 #[test]
 fn documentation_only_content_generates_nothing() {
-    let workspace = Workspace::with(
+    let workspace = document_workspace(
         "# Notes\n\n```typeDiagram\ntype A { x: Int }\n```\n\n```mustache\n{{name}}\n```\n\n```dart\nclass A {}\n```\n",
     );
     let output = workspace.build();
@@ -300,7 +236,7 @@ fn documentation_only_content_generates_nothing() {
 /// build fails rather than proceeding.
 #[test]
 fn a_hand_written_output_is_never_overwritten() {
-    let workspace = Workspace::with(STORE);
+    let workspace = document_workspace(STORE);
     workspace.write("lib/models.dart", "// mine, by hand\n");
 
     let error = workspace.build_failure();
@@ -311,7 +247,7 @@ fn a_hand_written_output_is_never_overwritten() {
 /// [typediagram.output]: a dropped template drops its file.
 #[test]
 fn a_removed_template_collects_its_output() {
-    let workspace = Workspace::with(STORE);
+    let workspace = document_workspace(STORE);
     let _ = workspace.build();
     assert!(workspace.exists("lib/names.dart"));
 
@@ -350,7 +286,7 @@ fn every_refusal_is_coded_and_located() {
         ),
         (
             "DMX8003",
-            "lines 5 and 9",
+            "on line 5 and the Mustache template in docs/store.dmx.md on line 9",
             "```typeDiagram\ntype A { x: Int }\n```\n\n```mustache {\"dmx\":{\"output\":\"lib/a.dart\"}}\na\n```\n\n```mustache {\"dmx\":{\"output\":\"lib/a.dart\"}}\nb\n```\n",
         ),
         (
@@ -379,7 +315,7 @@ fn every_refusal_is_coded_and_located() {
             "```typeDiagram\ntype A { x: Int }\n```\n\n```mustache {\"dmx\":{\"output\":\"lib/a.dart\"}}\nint probe() => throw StateError('{{#declarations}}{{name}}{{/declarations}}');\n```\n",
         ),
     ] {
-        let workspace = Workspace::with(document);
+        let workspace = document_workspace(document);
         let error = workspace.build_failure();
         assert!(error.contains(code), "expected {code}:\n{error}");
         assert!(
@@ -405,7 +341,7 @@ fn every_refusal_is_coded_and_located() {
 /// their outputs, and the exact context — and generates nothing.
 #[test]
 fn explain_prints_the_context_and_writes_nothing() {
-    let workspace = Workspace::with(STORE);
+    let workspace = document_workspace(STORE);
     let output = workspace.dmx(&["explain", "docs/store.dmx.md"]);
     assert!(
         output.status.success(),
@@ -444,7 +380,10 @@ fn explain_prints_the_context_and_writes_nothing() {
     for (args, needle) in [
         (vec!["explain"], "takes exactly one file"),
         (vec!["explain", "docs", "lib"], "takes exactly one file"),
-        (vec!["explain", "lib/models.dart"], "Markdown documents"),
+        (
+            vec!["explain", "lib/models.dart"],
+            "a typeDiagram definition (`.td`)",
+        ),
     ] {
         let refused = workspace.dmx(&args);
         assert!(
@@ -465,7 +404,7 @@ fn explain_prints_the_context_and_writes_nothing() {
 /// output, and a definition change is.
 #[test]
 fn only_the_group_is_a_dependency_of_its_output() {
-    let workspace = Workspace::with(STORE);
+    let workspace = document_workspace(STORE);
     let _ = workspace.build();
     let before = workspace.read("lib/models.dart");
 
@@ -500,7 +439,7 @@ fn only_the_group_is_a_dependency_of_its_output() {
 /// annotation may not claim it and a Dart file may not be generated by it.
 #[test]
 fn the_builtin_name_is_not_an_annotation() {
-    let workspace = Workspace::with(STORE);
+    let workspace = document_workspace(STORE);
     workspace.write(
         "lib/hand.dart",
         "@dmx('typeDiagram')\nclass Hand {\n  final int a = 0;\n}\n",
@@ -515,7 +454,7 @@ fn the_builtin_name_is_not_an_annotation() {
 /// same place however dmx was launched.
 #[test]
 fn outputs_land_in_the_package_the_document_belongs_to() {
-    let workspace = Workspace::with("# empty\n");
+    let workspace = document_workspace("# empty\n");
     workspace.write("packages/store/pubspec.yaml", "name: store\n");
     workspace.write("packages/store/docs/models.dmx.md", STORE);
 
@@ -560,7 +499,7 @@ fn outputs_land_in_the_package_the_document_belongs_to() {
 /// but a renamed document takes its own outputs with it.
 #[test]
 fn one_output_has_one_live_source() {
-    let workspace = Workspace::with(STORE);
+    let workspace = document_workspace(STORE);
     let _ = workspace.build();
     assert!(workspace.exists("lib/models.dart"));
 

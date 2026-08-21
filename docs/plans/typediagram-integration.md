@@ -100,16 +100,22 @@ Every phase above is implemented, tested, and gated by `make ci`.
 |---|---|
 | `src/dmx/src/typediagram/{lexer,parser,ast,model}.rs` | The typeDiagram front end, in Rust, with no typeDiagram dependency |
 | `src/dmx/src/typediagram/json.rs` | The model in upstream's JSON shape — the compatibility surface, read only by the differential corpus |
-| `src/dmx/src/typediagram/markdown.rs` | CommonMark binding over `pulldown-cmark`, fences as AST nodes |
+| `src/dmx/src/typediagram/binding.rs` | What a binding *is*, shared by both front ends — group, template, output, and the sentence each origin is located by |
+| `src/dmx/src/typediagram/standalone.rs` | The `.td` front end: the canonical model template, or the `.mustache` files beside the definition |
+| `src/dmx/src/typediagram/semantics.rs` | Value semantics and the JSON codec one generated class gets [typediagram.canonical] |
+| `src/dmx/src/typediagram/naming.rs` | What generated code calls each union case [typediagram.canonical.names] |
+| `src/dmx/templates/diagram_model.mustache` | The canonical model template itself |
+| `src/dmx/src/typediagram/markdown.rs` | The Markdown front end: CommonMark binding over `pulldown-cmark`, fences as AST nodes |
+| `src/dmx/src/typediagram/run.rs` | The one pipeline behind both — resolve, invoke, validate, emit, explain |
 | `src/dmx/src/typediagram/context.rs` | The Mustache context, versioned by `CONTEXT_VERSION` |
 | `src/dmx/src/typediagram/target.rs` | The one place a language appears: type text, extension, project marker, validation |
-| `src/dmx/src/typediagram/{emit,document}.rs` | Path safety, ownership markers, stale collection, build/check/explain |
+| `src/dmx/src/typediagram/{emit,document}.rs` | Path safety, ownership markers, stale collection, and the Markdown entry point |
 | `src/dmx/src/macros/typediagram.rs` | The built-in macro, in the same registry `@dmx('model')` is in |
 | `src/dmx/src/hygiene.rs` | [hygiene] as a CST check, because a user template is nobody's reviewed code |
 | `src/dmx/tests/typediagram/corpus` | The `.td` fixtures and the oracle's model JSON |
-| `src/dmx/tests/typediagram/golden` | The same fixtures rendered to Dart through one shared template, committed and analyzer-gated |
+| `src/dmx/tests/typediagram/golden` | The same fixtures rendered to Dart as standalone files through one shared template, committed and analyzer-gated |
 | `scripts/typediagram-oracle.mjs` | Development-only regeneration of that oracle from a typeDiagram checkout |
-| `examples/storefront/docs/shipping.dmx.md` | One definition, two generated Dart files, 9 tests over them |
+| `examples/storefront/models/` | `shipping.td` and two templates beside it, two generated Dart files, 9 tests over them |
 
 ### [typediagram.delivery.corpus] Corpus → Dart
 
@@ -118,13 +124,13 @@ serialised, and compared against the oracle's JSON, and no Dart was ever
 produced from them. Against [emission] — emitting Dart that does not compile is
 the worst failure this repo has — model parity alone was not enough.
 
-Each fixture is now wrapped in a real `*.dmx.md` document over one shared
-template, run through the shipped binary, and committed as
-`tests/typediagram/golden/lib/<name>.dart`. `cargo test --test
-typediagram_golden` holds the bytes; `make corpus` runs `dart analyze
---fatal-infos` over them. The definitions are never copied — the document is
-assembled from the `.td` file at test time, so the parity corpus stays the one
-place a definition is written.
+The whole corpus is now laid out as standalone files — `models/<name>.td`
+beside `models/<name>.mustache` — built by the shipped binary in one `dmx
+build`, and committed as `tests/typediagram/golden/lib/<name>.dart`. `cargo
+test --test typediagram_golden` holds the bytes; `make corpus` runs `dart
+analyze --fatal-infos` over them. Nothing is wrapped, assembled, or extracted:
+the `.td` files are copied out of the parity corpus byte for byte, so it stays
+the one place a definition is written.
 
 - [x] Every corpus fixture renders to Dart and the output is committed and byte-gated.
 - [x] `make corpus` analyzes it with `dart analyze --fatal-infos`.
@@ -132,7 +138,55 @@ place a definition is written.
 - [x] A signature carries `isOverload` so a target without overloading can name each one. `hasOverloads` on the declaration cannot be read from inside `{{#signatures}}`: a section entered on a name the *declaration* carries pushes that value with the declaration beneath it, so the ordinal read back is the declaration's.
 - [x] The shipped storefront template stopped using `{{genericDeclaration}}`, which HTML-escapes `<T>` into `&lt;T&gt;`. It only ever worked there because nothing in that document is generic.
 
+### [typediagram.delivery.standalone] Definition File → Template File → Dart
+
+A definition and its templates had exactly one spelling: fences inside a
+Markdown document. That made the plain case — a model file, a template file, a
+generated file — reachable only by writing prose around it, and it put a
+CommonMark parse between an author and their own definition.
+
+`.td` + `.mustache` → `.dart` is now the primary spelling
+[typediagram.standalone]. The binding is the file names; the pipeline behind it
+is the same one, because both front ends build the same
+`binding::Group` and everything after that is `run.rs`.
+
+- [x] `.td` files are discovered recursively by `build` and `watch`, and accepted by name.
+- [x] `<name>.mustache` binds to `<name>.td`; `<name>.<suffix>.mustache` is a second output; the longest matching definition wins.
+- [x] The default output is the target's own source root, casing, and extension — `shipping.wire.mustache` → `lib/shipping_wire.dart`. A target now carries `source_root`, so the convention is a language's decision rather than a hard-coded `lib`.
+- [x] A leading `{{! dmx output=… target=… }}` comment overrides it, and stays in the template because it renders to nothing. `key=value` rather than JSON: a Mustache comment ends at the first `}` inside it, which no object can survive.
+- [x] A `.mustache` file with no definition beside it is left alone, so the catalogue's preview templates and every other project's Mustache stay untouched.
+- [x] Editing a template regenerates the definition it is bound to — `.mustache` is watched but never generated *from*, so `--check` cannot report the same drift twice.
+- [x] `dmx explain` takes a `.td`, a template bound to one, or a document.
+- [x] Diagnostics are located in each origin's own terms: a file by its name and a real line number, a fence by its ordinal and the document line. No fence appears in a message about a file.
+- [x] The VS Code extension watches `*.td` alongside `*.dmx.md`, and leaves templates to the binary.
+- [x] The golden corpus and the storefront example both generate from standalone files.
+
+### [typediagram.delivery.canonical] One Model Template
+
+A definition with no template beside it used to generate nothing, and every
+project that wanted model classes had to write — and then maintain — its own
+Mustache. The golden corpus and the storefront example each carried a near-copy
+of the same one, and neither produced a *value*: the classes had no `==`, no
+`hashCode`, no `copyWith`, and no codec.
+
+There is now exactly one model template, shipped in the binary and used
+wherever a diagram generates model classes [typediagram.canonical].
+
+- [x] A definition with nothing beside it renders through the canonical model template; a `<name>.mustache` takes its place; a `<name>.<suffix>.mustache` is still an extra output.
+- [x] Records and union cases are immutable values: `==`, `hashCode`, `toString`, `copyWith` — built by the same Rust that builds them for `@dmx('model')`, so the annotated path and the diagram path can never say different things about the same type.
+- [x] JSON is on an `extension <Name>Json`, never on the class. `types::Decoders` is what makes a nested decode name the extension, and the annotated path keeps naming the class.
+- [x] The runtime import is prefixed, so a diagram that declares its own `Result`, `Ok`, or `Err` — as the parity corpus does — cannot hide the one the codec means.
+- [x] A declaration dmx cannot build a codec for keeps its class and its value semantics and gets no extension, and `dmx explain` says which member decided that (`DMX8009`).
+- [x] A union case is called what typeDiagram calls it — the case's own name — and takes its union's name as a prefix only where Dart's one namespace forces it [typediagram.canonical.names].
+- [x] The golden corpus is the canonical template's gate: every shape typeDiagram can express, regenerated byte-for-byte and run through `dart analyze --fatal-infos`.
+
 ### [typediagram.delivery.next] Not Yet Done
+
+- [ ] **tdbin interop.** The names are already aligned: a case generates under the name typeDiagram's own emitters give it [typediagram.canonical.names], so a type dmx generated and a type typeDiagram generated are the same type by name. What that interop needs beyond agreeing names — which artefacts are exchanged, in which direction, and what dmx reads or writes — is not yet written down here.
+- [ ] **A union case cannot be a field's type unless its union can be decoded.** A field typed by a *generic* or *untagged* union has no codec, so its owner has none either. Tagged, non-generic unions work; the other two need something in the payload that says which case it is, and the diagram does not say it.
+- [ ] **Mustache partials.** `model.mustache` and `diagram_model.mustache` place the same prepared expressions in two layouts — one into a class body somebody else owns, one into a whole file. The expressions are shared in Rust; the *layout* is written twice because ramhorns resolves partials from a folder and dmx's templates are compiled in.
+
+- [ ] **A `.td` grammar for the editor.** The extension ships a Mustache grammar and a Dart injection; a `.td` file gets no language id, no comment toggle, and no highlighting. It is the most visible gap now that definitions are files people open.
 
 - [ ] **Decide what `{{ }}` means for a code generator.** Mustache escapes it as HTML, which is never right for Dart: any value holding `<`, `>`, `&` or `"` — every generic type, every function type — silently becomes uncompilable. `{{{ }}}` is the documented way out and the built-in templates use it, but the default is a trap that fails at the analyzer rather than at the template. Either drop escaping for code targets (`jsoncontent.rs` `render_escaped`, plus the two tests that pin the current behaviour) or make an unescaped-by-default tag the documented norm.
 - [ ] **A rule for reading a parent's name inside a child section.** `isOverload` solves one instance of a general trap: any `{{#parentFlag}}…{{childName}}…{{/parentFlag}}` reads the parent's value. Either document the rule where template authors will meet it or push the flags every loop body needs onto the loop's own members.
@@ -141,16 +195,18 @@ place a definition is written.
 - [ ] **Prove `@targets` exclusion end to end.** `targeting.td` selects nothing away for `dart`, so the corpus shows the filter keeping declarations and never shows it dropping one. A fixture that excludes the target under test would.
 - [ ] **`dmx explain --stages` for documents.** `explain` prints groups, dependencies, paths, and the exact context, but not the render → hygiene → validation stages [execution].
 - [ ] **A persistent build cache.** Outputs are compared whole, which is correct and re-renders more than a cache would.
-- [ ] **Partials in document templates.** Every bound fence is self-contained, so two templates over one definition cannot share a fragment.
+- [ ] **Partials in templates.** Every template is self-contained, so two templates over one definition cannot share a fragment — which is why the golden corpus copies one template body per fixture instead of referencing it.
+- [ ] **Two definitions claiming one output.** Duplicate outputs are refused within one definition's bindings and within one document, but not across two sources in the same pass: each would take the other's file over and the last pass would win. The ownership marker already records which source wrote a file, so the check has what it needs.
+- [ ] **A definition and a document in one package.** Nothing prevents it and nothing tests it. The storefront now shows only the file spelling; the document spelling is proved by `typediagram_cli` and the extension's end-to-end suite instead.
 
 ## [typediagram.delivery.acceptance] Acceptance Criteria
 
-- Ordinary typeDiagram Markdown remains valid and renderable outside dmx.
-- `typeDiagram` is resolved by the ordinary built-in macro registry; Markdown binding does not create a second macro engine.
+- A `.td` file is ordinary typeDiagram and an ordinary typeDiagram Markdown document stays renderable outside dmx; a `.mustache` file is ordinary Mustache.
+- `typeDiagram` is resolved by the ordinary built-in macro registry; neither front end creates a second macro engine, a second context shape, or a second ownership protocol.
 - Production parsing and resolution run entirely in Rust without typeDiagram tooling or Node.
 - A definition is authored once and may feed multiple Mustache outputs without copying the model.
 - Mustache, not typeDiagram's language emitter, controls every generated byte.
 - Templates receive resolved, target-ready values and contain no type-system logic.
 - Invalid definitions, metadata, templates, paths, or Dart fail without changing output.
 - `build`, `check`, `watch`, and `explain` agree on groups, context, dependencies, and output paths.
-- Every generated file is deterministic, owned, analyzer-clean, below 500 lines, and reproducible from its Markdown source.
+- Every generated file is deterministic, owned, analyzer-clean, below 500 lines, and reproducible from its definition and template.

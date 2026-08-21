@@ -94,6 +94,16 @@ impl Model {
         &self.decls
     }
 
+    /// The declaration `name` refers to, when this model has one.
+    ///
+    /// Resolution says *that* a name is declared [typediagram.model]; this says
+    /// what it was declared as, which is what a codec needs before it can
+    /// decide whether the name has one.
+    #[must_use]
+    pub fn declaration(&self, name: &str) -> Option<&Decl> {
+        self.decls.iter().find(|decl| decl.name() == name)
+    }
+
     /// The declarations `target` generates from — everything, minus what a
     /// `@targets` / `@skipTargets` annotation excludes.
     pub fn visible(&self, target: &str) -> impl Iterator<Item = &Decl> {

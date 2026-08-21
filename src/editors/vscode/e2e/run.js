@@ -14,7 +14,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { runTests } = require('@vscode/test-electron');
-const { annotatedClass, document } = require('./fixture.js');
+const { annotatedClass, definition, document, template } = require('./fixture.js');
 
 const BINARY = process.platform === 'win32' ? 'dmx.exe' : 'dmx';
 
@@ -39,6 +39,12 @@ function writeWorkspace(workspace) {
   // has to find it, watch it, and generate the file it names.
   fs.mkdirSync(path.join(workspace, 'docs'), { recursive: true });
   fs.writeFileSync(path.join(workspace, 'docs', 'shipping.dmx.md'), document('Parcel', 'tracking'));
+  // A standalone definition with the template beside it
+  // [typediagram.standalone]: the extension has to find the `.td`, watch it,
+  // and answer an edit to either file.
+  fs.mkdirSync(path.join(workspace, 'models'), { recursive: true });
+  fs.writeFileSync(path.join(workspace, 'models', 'crate.td'), definition('Crate', 'code'));
+  fs.writeFileSync(path.join(workspace, 'models', 'crate.mustache'), template());
 }
 
 async function main() {

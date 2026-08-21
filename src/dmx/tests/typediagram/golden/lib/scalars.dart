@@ -1,9 +1,11 @@
-// dmx: generated from docs/scalars.dmx.md — do not edit.
-// dmx: group 1, fences 1/2, definition 7db716b44e16128d, template ebcc1789a3d0fa99, context v1, dmx 0.0.0.
+// dmx: generated from models/scalars.td — do not edit.
+// dmx: rendered through the canonical model template, definition 7db716b44e16128d, template 5fba7c04728545cb, context v1, dmx 0.0.0.
 
-// Generated from docs/scalars.dmx.md. Edit the diagram, not this file.
+// Generated from models/scalars.td. Edit the definition, not this file.
 
-/// Scalars — a record from the diagram.
+import 'package:dmx/dmx.dart' as dmx;
+
+/// Scalars — an immutable value from the diagram.
 final class Scalars {
   /// Every field, in the order the diagram declares them.
   const Scalars({required this.flag, required this.count, required this.ratio, required this.text, required this.blob, required this.nothing, required this.at, required this.id, required this.amount, required this.tags, required this.index, this.maybe, required this.anything, this.deep});
@@ -49,6 +51,45 @@ final class Scalars {
 
   /// The `deep` field, declared as `Option<Option<Map<Uuid, List<Any>>>>`.
   final Map<Uuid, List<Object>>? deep;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Scalars &&
+          other.flag == flag &&
+          other.count == count &&
+          other.ratio == ratio &&
+          other.text == text &&
+          dmx.dmxDeepEquals(other.blob, blob) &&
+          other.at == at &&
+          other.id == id &&
+          other.amount == amount &&
+          dmx.dmxDeepEquals(other.tags, tags) &&
+          dmx.dmxDeepEquals(other.index, index) &&
+          other.maybe == maybe &&
+          other.anything == anything &&
+          dmx.dmxDeepEquals(other.deep, deep));
+
+  @override
+  int get hashCode => Object.hash(
+        runtimeType,
+        flag,
+        count,
+        ratio,
+        text,
+        dmx.dmxDeepHash(blob),
+        at,
+        id,
+        amount,
+        dmx.dmxDeepHash(tags),
+        dmx.dmxDeepHash(index),
+        maybe,
+        anything,
+        dmx.dmxDeepHash(deep),
+      );
+
+  @override
+  String toString() => 'Scalars(flag: $flag, count: $count, ratio: $ratio, text: $text, blob: $blob, at: $at, id: $id, amount: $amount, tags: $tags, index: $index, maybe: $maybe, anything: $anything, deep: $deep)';
 }
 
 /// `Uuid` as the diagram declares it.

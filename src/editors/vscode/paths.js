@@ -9,9 +9,9 @@
 // the editor, from a generator that has stopped working.
 //
 // So: what the setting names, if it exists, and otherwise every Dart package
-// this folder actually holds — plus every `*.dmx.md` document in it, because a
-// document generates Dart with no annotated Dart source to find it by
-// [typediagram.documents].
+// this folder actually holds — plus every `*.td` definition and `*.dmx.md`
+// document in it, because both generate Dart with no annotated Dart source to
+// find them by [typediagram.standalone], [typediagram.documents].
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -74,17 +74,23 @@ function packageLibraries(root, depth = MAX_DEPTH) {
   return found;
 }
 
-/// The suffix that makes a Markdown file one dmx generates from.
-const DOCUMENT_SUFFIX = '.dmx.md';
+/// The suffixes that make a file one dmx generates from without any annotated
+/// Dart to find it by: a standalone typeDiagram definition
+/// [typediagram.standalone] and a Markdown document [typediagram.documents].
+const SOURCE_SUFFIXES = ['.td', '.dmx.md'];
 
-/// Every `*.dmx.md` document under `root`, as workspace-relative file paths.
+/// Every such file under `root`, as workspace-relative file paths.
 ///
 /// Files rather than their directories: `dmx watch` takes either, and naming
-/// the document watches exactly it, where naming `docs/` would watch a whole
-/// tree of prose for changes that can never matter. A package's own
-/// subdirectories ARE searched, unlike `packageLibraries` — a document
-/// normally lives in the package whose `lib` it generates into.
-function documents(root, depth = MAX_DEPTH + 1) {
+/// the file watches exactly it, where naming `docs/` would watch a whole tree
+/// of prose for changes that can never matter. A package's own subdirectories
+/// ARE searched, unlike `packageLibraries` — these files normally live in the
+/// package whose `lib` they generate into.
+///
+/// A `.td` file's templates are NOT named. They sit beside it, and `dmx watch`
+/// answers an edit to one by regenerating the definition it belongs to — the
+/// binding rule lives in the binary, which is the only place it can be right.
+function sources(root, depth = MAX_DEPTH + 1) {
   const found = [];
   let entries = [];
   try {
@@ -96,10 +102,10 @@ function documents(root, depth = MAX_DEPTH + 1) {
     if (entry.name.startsWith('.') || SKIPPED.has(entry.name)) {
       continue;
     }
-    if (entry.isFile() && entry.name.endsWith(DOCUMENT_SUFFIX)) {
+    if (entry.isFile() && SOURCE_SUFFIXES.some((suffix) => entry.name.endsWith(suffix))) {
       found.push(entry.name);
     } else if (entry.isDirectory() && depth > 1) {
-      found.push(...documents(path.join(root, entry.name), depth - 1).map((relative) => path.join(entry.name, relative)));
+      found.push(...sources(path.join(root, entry.name), depth - 1).map((relative) => path.join(entry.name, relative)));
     }
   }
   return found;
@@ -116,7 +122,7 @@ function watchTargets(root, configured, explicit) {
   if (explicit) {
     return present;
   }
-  return [...new Set([...present, ...packageLibraries(root), ...documents(root)])];
+  return [...new Set([...present, ...packageLibraries(root), ...sources(root)])];
 }
 
-module.exports = { documents, packageLibraries, watchTargets };
+module.exports = { packageLibraries, sources, watchTargets };

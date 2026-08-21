@@ -25,7 +25,7 @@ mod diff;
 mod enums;
 mod fake;
 mod lerp;
-mod model;
+pub(crate) mod model;
 mod rest;
 mod route;
 mod table;
@@ -386,8 +386,8 @@ pub fn query_string(ty: &DartType, name: &str) -> String {
 /// expression instead — which is the kind of thing a template must never be
 /// asked to know [context.discipline].
 #[must_use]
-pub fn error_patterns(arity: usize) -> Vec<String> {
-    slot_patterns(arity, "Err(error: final e)")
+pub fn error_patterns(arity: usize, runtime: crate::types::Runtime) -> Vec<String> {
+    slot_patterns(arity, &format!("{}(error: final e)", runtime.name("Err")))
 }
 
 /// The record patterns that put `marker` in each slot of `arity` in turn, and

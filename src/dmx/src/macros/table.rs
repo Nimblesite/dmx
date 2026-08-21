@@ -152,7 +152,7 @@ fn build(decl: &RawDecl) -> Result<TableCtx> {
     }
 
     let arity = columns.iter().filter(|c| c.isComplex).count();
-    let mut patterns = macros::error_patterns(arity).into_iter();
+    let mut patterns = macros::error_patterns(arity, crate::types::Runtime::IN_CLASS).into_iter();
     for column in columns.iter_mut().filter(|c| c.isComplex) {
         column.errPattern = patterns.next().unwrap_or_default();
     }

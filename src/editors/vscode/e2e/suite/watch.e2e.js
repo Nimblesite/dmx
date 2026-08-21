@@ -288,6 +288,45 @@ describe('the packaged VSIX, running the engine it carries', () => {
     );
   });
 
+  it('generates from a standalone .td definition, and answers an edit to either file', async () => {
+    // Three files and no wrapper [typediagram.standalone]: models/crate.td,
+    // models/crate.mustache, and the lib/crate.dart the extension writes.
+    await until('the definition to generate lib/crate.dart', () => {
+      try {
+        return read('lib/crate.dart').includes('final class Crate {');
+      } catch {
+        return false;
+      }
+    });
+    const generated = read('lib/crate.dart');
+    assert.ok(
+      generated.startsWith('// dmx: generated from models/crate.td'),
+      `lib/crate.dart carries no ownership marker:\n${generated}`,
+    );
+    assert.match(generated, /rendered through models\/crate\.mustache/);
+    assert.match(generated, /const Crate\(\{required this\.code\}\);/);
+
+    // Saving the definition regenerates it, with no command.
+    const definitionFile = await openInEditor('models/crate.td');
+    await editOnce(definitionFile.editor, 'code: String', 'code: String\n  weightG: Int');
+    assert.ok(await definitionFile.document.save(), 'models/crate.td did not save');
+    await until('the saved definition to regenerate lib/crate.dart', () =>
+      read('lib/crate.dart').includes('final int weightG;'),
+    );
+
+    // And so does saving the TEMPLATE, which is not a source of its own.
+    const templateFile = await openInEditor('models/crate.mustache');
+    await editOnce(templateFile.editor, 'final class', 'abstract final class');
+    assert.ok(await templateFile.document.save(), 'models/crate.mustache did not save');
+    await until('the saved template to regenerate lib/crate.dart', () =>
+      read('lib/crate.dart').includes('abstract final class Crate {'),
+    );
+
+    // Neither source is ever rewritten.
+    assert.ok(read('models/crate.td').includes('# Crate, and nothing else in this file.'));
+    assert.ok(read('models/crate.mustache').includes('{{#declarations}}'));
+  });
+
   it('stop, build, and restart from the palette all drive the real engine', async () => {
     await vscode.commands.executeCommand('dmx.stopWatcher');
 

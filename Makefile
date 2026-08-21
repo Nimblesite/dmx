@@ -310,12 +310,12 @@ dart-package-publish: dart-package ## Prove the pub archive is publishable (need
 	@# so this passes only from a clean checkout — which is what a tag is.
 	cd $(DMX_PACKAGE_DIR) && dart pub publish --dry-run
 
-example: ## Generate the example — annotated Dart and its typeDiagram document — analyze it, run its checks
+example: ## Generate the example — annotated Dart and its typeDiagram definitions — analyze it, run its checks
 	@# One invocation for both backends. Annotated Dart is generated INTO, and a
-	@# `*.dmx.md` document resolves its outputs against the package it belongs to
+	@# `.td` definition resolves its outputs against the package it belongs to
 	@# [typediagram.output] — so neither depends on where this runs from, unlike
 	@# the macro-worker examples below, whose workers are found from the cwd.
-	cargo run $(CRATE) --quiet -- build $(EXAMPLE_DIR)/lib $(EXAMPLE_DIR)/docs --insert-regions
+	cargo run $(CRATE) --quiet -- build $(EXAMPLE_DIR)/lib $(EXAMPLE_DIR)/models --insert-regions
 	cd $(EXAMPLE_DIR) && dart pub get && dart analyze --fatal-infos && dart test
 
 EXAMPLE run-example: example

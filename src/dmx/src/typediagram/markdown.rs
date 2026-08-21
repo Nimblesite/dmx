@@ -14,10 +14,8 @@
 
 use anyhow::{Result, bail};
 use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
-use serde_json::Value;
 
-/// The default generation target when a template does not name one.
-pub const DEFAULT_TARGET: &str = "dart";
+use super::binding::{self, BoundTemplate, Fence, Group, Metadata, Origin};
 
 /// The info-string language that opens a definition, compared case-insensitively.
 const DEFINITION_LANGUAGE: &str = "typediagram";
@@ -25,46 +23,16 @@ const DEFINITION_LANGUAGE: &str = "typediagram";
 /// The info-string language a bound template uses.
 const TEMPLATE_LANGUAGE: &str = "mustache";
 
-/// One fenced code block dmx looked at [typediagram.documents].
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Fence {
-    /// Its one-based position among the document's top-level fenced blocks.
-    pub ordinal: usize,
-    /// The one-based document line its opening marker sits on.
-    pub line: usize,
-    /// Its content, exactly as `CommonMark` reads it.
-    pub body: String,
-}
-
-/// A template fence bound to the definition above it [typediagram.binding].
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct BoundTemplate {
-    /// The fence itself.
-    pub fence: Fence,
-    /// The workspace-relative output path, as the author wrote it.
-    pub output: String,
-    /// The generation target, defaulting to [`DEFAULT_TARGET`].
-    pub target: String,
-}
-
-/// One definition and every template bound to it [typediagram.binding].
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Group {
-    /// Its one-based position among the document's generation groups.
-    pub ordinal: usize,
-    /// The typeDiagram fence.
-    pub definition: Fence,
-    /// The templates it generates through, in document order.
-    pub templates: Vec<BoundTemplate>,
-}
+/// The spelling a reader copies when their fence metadata is refused.
+const EXAMPLE: &str = "```mustache {\"dmx\": {\"output\": \"lib/models.dart\"}}";
 
 /// Every generation group in `source`, in document order.
 ///
 /// # Errors
 ///
-/// Fails on malformed fence metadata (`DMX8001`), a bound template with no
-/// definition above it (`DMX8002`), or two templates claiming one output path
-/// (`DMX8003`).
+/// Fails on malformed fence metadata (`DMX8001`) or on a bound template with
+/// no definition above it (`DMX8002`). Two templates claiming one output is
+/// [`super::binding::refuse_duplicate_outputs`], which both front ends run.
 pub fn groups(source: &str) -> Result<Vec<Group>> {
     let nodes = top_level_fences(source)?;
     let mut groups: Vec<Group> = Vec::new();
@@ -80,6 +48,7 @@ pub fn groups(source: &str) -> Result<Vec<Group>> {
                 }
                 if !templates.is_empty() {
                     groups.push(Group {
+                        origin: Origin::Document,
                         ordinal: groups.len().saturating_add(1),
                         definition: definition.clone(),
                         templates,
@@ -99,26 +68,7 @@ pub fn groups(source: &str) -> Result<Vec<Group>> {
             Node::Other => {}
         }
     }
-    refuse_duplicate_outputs(&groups)?;
     Ok(groups)
-}
-
-/// Refuses two templates that would write the same file [typediagram.binding].
-fn refuse_duplicate_outputs(groups: &[Group]) -> Result<()> {
-    let mut seen: Vec<(&str, usize)> = Vec::new();
-    for group in groups {
-        for template in &group.templates {
-            match seen.iter().find(|(path, _)| *path == template.output) {
-                Some((path, line)) => bail!(
-                    "DMX8003 [typediagram.binding]: the templates on lines {line} and {} both \
-                     generate `{path}`; one output has one template",
-                    template.fence.line
-                ),
-                None => seen.push((&template.output, template.fence.line)),
-            }
-        }
-    }
-    Ok(())
 }
 
 /// What one top-level fenced block turned out to be.
@@ -212,7 +162,7 @@ fn classify(info: &str, fence: Fence) -> Result<Node> {
             Ok(Node::Definition(fence))
         }
         () if language.eq_ignore_ascii_case(TEMPLATE_LANGUAGE) => {
-            Ok(match binding(meta, &fence)? {
+            Ok(match declared(meta, &fence)? {
                 Some(template) => Node::Template(template),
                 None => Node::Other,
             })
@@ -223,60 +173,21 @@ fn classify(info: &str, fence: Fence) -> Result<Node> {
 
 /// The dmx binding a Mustache fence declares, or `None` when it declares none.
 ///
-/// Metadata that does not open with `{` belongs to somebody else's convention
-/// and is left alone. Metadata that does is dmx's to read: a JSON object
-/// without a `dmx` key is an ordinary example, and anything else is a mistake
-/// worth reporting rather than silently generating nothing
-/// [typediagram.binding].
-///
 /// # Errors
 ///
-/// Fails when the metadata is not a JSON object, when `dmx` is not an object,
-/// when `output` is missing or empty, or when an unrecognised key appears —
-/// all `DMX8001`.
-fn binding(meta: &str, fence: &Fence) -> Result<Option<BoundTemplate>> {
-    if !meta.starts_with('{') {
-        return Ok(None);
-    }
-    let fault = |detail: &str| {
-        anyhow::anyhow!(
-            "DMX8001 [typediagram.binding]: the Mustache fence on line {} has unusable dmx \
-             metadata: {detail}\n\n  ```mustache {{\"dmx\": {{\"output\": \"lib/models.dart\"}}}}",
-            fence.line
-        )
-    };
-    let Ok(Value::Object(metadata)) = serde_json::from_str::<Value>(meta) else {
-        return Err(fault("it is not a JSON object"));
-    };
-    let Some(dmx) = metadata.get("dmx") else {
-        return Ok(None);
-    };
-    let Value::Object(dmx) = dmx else {
-        return Err(fault("`dmx` is not an object"));
-    };
-    if let Some(unknown) = dmx.keys().find(|key| !DMX_KEYS.contains(&key.as_str())) {
-        return Err(fault(&format!(
-            "`dmx.{unknown}` is not a setting dmx knows"
-        )));
-    }
-    let output = match dmx.get("output") {
-        Some(Value::String(output)) if !output.trim().is_empty() => output.trim().to_owned(),
-        _ => return Err(fault("`dmx.output` must be a non-empty output path")),
-    };
-    let target = match dmx.get("target") {
-        None => DEFAULT_TARGET.to_owned(),
-        Some(Value::String(target)) if !target.trim().is_empty() => target.trim().to_owned(),
-        Some(_) => return Err(fault("`dmx.target` must be a target name")),
-    };
-    Ok(Some(BoundTemplate {
-        fence: fence.clone(),
-        output,
-        target,
-    }))
+/// Fails (`DMX8001`) for every reason [`binding::in_document`] fails. A fence names
+/// its own output or it is not a binding at all: a document has no convention
+/// to fall back on, because a fence has no file name to derive one from.
+fn declared(meta: &str, fence: &Fence) -> Result<Option<BoundTemplate>> {
+    binding::in_document(
+        meta,
+        fence.clone(),
+        &Metadata {
+            located: format!("the Mustache fence on line {}", fence.line),
+            example: EXAMPLE,
+        },
+    )
 }
-
-/// Every key a `dmx` metadata object may carry.
-const DMX_KEYS: &[&str] = &["output", "target"];
 
 /// The language and the metadata halves of an info string.
 fn split_info(info: &str) -> (&str, &str) {
@@ -306,7 +217,8 @@ fn line_of(starts: &[usize], offset: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::{DEFAULT_TARGET, groups};
+    use super::binding::DEFAULT_TARGET;
+    use super::groups;
 
     /// A document with `body` between two ordinary paragraphs, so every test
     /// also proves prose neither binds nor breaks.
@@ -445,14 +357,22 @@ mod tests {
         }
     }
 
-    /// [typediagram.binding]: two templates may not claim one path.
+    /// [typediagram.binding]: two templates may not claim one path, and the
+    /// refusal names each fence by the line its reader will scroll to.
     #[test]
     fn one_output_has_one_template() {
-        let error = groups(&document(
+        let found = groups(&document(
             "```typeDiagram\ntype A { x: Int }\n```\n\n```mustache {\"dmx\":{\"output\":\"lib/a.dart\"}}\na\n```\n\n```mustache {\"dmx\":{\"output\":\"lib/a.dart\"}}\nb\n```",
         ))
-        .expect_err("duplicate output");
-        assert!(format!("{error:#}").contains("DMX8003"), "{error:#}");
+        .expect("bind");
+        let error = format!(
+            "{:#}",
+            super::binding::refuse_duplicate_outputs("docs/a.dmx.md", &found)
+                .expect_err("duplicate output")
+        );
+        assert!(error.contains("DMX8003"), "{error}");
+        assert!(error.contains("on line 9"), "{error}");
+        assert!(error.contains("on line 13"), "{error}");
     }
 
     /// [typediagram.binding]: longer fences, CRLF, Unicode prose, and several

@@ -11,7 +11,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { test } = require('node:test');
-const { documents, packageLibraries, watchTargets } = require('../paths.js');
+const { packageLibraries, sources, watchTargets } = require('../paths.js');
 
 /// A throwaway workspace holding `directories`, each made a package when its
 /// entry says so.
@@ -104,17 +104,20 @@ function withFiles(layout, files) {
   return root;
 }
 
-test('every *.dmx.md document is watched, wherever it lives', () => {
-  const root = withFiles({ 'packages/store': true, docs: false }, [
+test('every definition and document is watched, wherever it lives', () => {
+  const root = withFiles({ 'packages/store': true, docs: false, models: false }, [
     'models.dmx.md',
     'docs/shipping.dmx.md',
+    'models/shipping.td',
+    'models/shipping.mustache',
     'packages/store/docs/store.dmx.md',
     'docs/README.md',
     'packages/store/lib/notes.md',
   ]);
 
-  assert.deepEqual(documents(root), [
+  assert.deepEqual(sources(root), [
     path.join('docs', 'shipping.dmx.md'),
+    path.join('models', 'shipping.td'),
     'models.dmx.md',
     path.join('packages', 'store', 'docs', 'store.dmx.md'),
   ]);
@@ -122,20 +125,25 @@ test('every *.dmx.md document is watched, wherever it lives', () => {
   const targets = watchTargets(root, ['lib'], false);
   assert.ok(targets.includes(path.join('packages', 'store', 'lib')), targets.join(', '));
   assert.ok(targets.includes(path.join('docs', 'shipping.dmx.md')), targets.join(', '));
+  assert.ok(targets.includes(path.join('models', 'shipping.td')), targets.join(', '));
+  // A template is watched by the binary, through the definition beside it —
+  // naming it here would watch it twice and generate from it never.
+  assert.ok(!targets.includes(path.join('models', 'shipping.mustache')), targets.join(', '));
   assert.ok(!targets.includes(path.join('docs', 'README.md')), targets.join(', '));
 });
 
-test('build output and hidden directories hold no documents worth watching', () => {
+test('build output and hidden directories hold no sources worth watching', () => {
   const root = withFiles({ build: false, node_modules: false, '.git': false }, [
     'build/generated.dmx.md',
-    'node_modules/pkg/thing.dmx.md',
+    'node_modules/pkg/thing.td',
     '.git/stash.dmx.md',
     'kept.dmx.md',
+    'kept.td',
   ]);
-  assert.deepEqual(documents(root), ['kept.dmx.md']);
+  assert.deepEqual(sources(root), ['kept.dmx.md', 'kept.td']);
 });
 
-test('explicit paths are honoured exactly, documents included or not', () => {
+test('explicit paths are honoured exactly, sources included or not', () => {
   const root = withFiles({ docs: false }, ['docs/shipping.dmx.md']);
   assert.deepEqual(watchTargets(root, [path.join('docs', 'shipping.dmx.md')], true), [
     path.join('docs', 'shipping.dmx.md'),

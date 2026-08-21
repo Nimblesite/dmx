@@ -38,24 +38,21 @@ pub fn expand(invocation: &Invocation<'_>) -> Result<Vec<GeneratedFile>> {
         .templates
         .iter()
         .map(|template| {
-            let target = target::find(&template.target)
-                .with_context(|| where_it_is(invocation, template.fence.line))?;
+            let located = || invocation.group.located(invocation.document, template);
+            let target = target::find(&template.target).with_context(located)?;
             invocation
                 .model
                 .validate_for_target(target.name)
                 .map_err(|found| {
                     anyhow::anyhow!(
-                        "DMX8004 [typediagram.model]: the typeDiagram definition in {} (fence {}, \
-                         line {}) uses types the `{}` target cannot generate:\n{}",
-                        invocation.document,
-                        invocation.group.definition.ordinal,
-                        invocation.group.definition.line,
+                        "DMX8004 [typediagram.model]: the typeDiagram definition in {} uses types \
+                         the `{}` target cannot generate:\n{}",
+                        invocation.group.definition_at(invocation.document),
                         target.name,
                         found.in_document(invocation.group.definition.line)
                     )
                 })?;
-            require_target_extension(&template.output, target)
-                .with_context(|| where_it_is(invocation, template.fence.line))?;
+            require_target_extension(&template.output, target).with_context(located)?;
 
             let model = context::build(
                 invocation.document,
@@ -64,13 +61,13 @@ pub fn expand(invocation: &Invocation<'_>) -> Result<Vec<GeneratedFile>> {
                 invocation.model,
                 target,
             )
-            .with_context(|| where_it_is(invocation, template.fence.line))?;
+            .with_context(located)?;
             let body = render::render_json(&template.fence.body, &model).with_context(|| {
                 format!(
                     "DMX8008 [typediagram.templates]: the Mustache template generating `{}` does \
                      not compile ({})",
                     template.output,
-                    where_it_is(invocation, template.fence.line)
+                    located()
                 )
             })?;
 
@@ -81,7 +78,7 @@ pub fn expand(invocation: &Invocation<'_>) -> Result<Vec<GeneratedFile>> {
                      source the `{}` target refuses ({})",
                     template.output,
                     target.name,
-                    where_it_is(invocation, template.fence.line)
+                    located()
                 )
             })?;
             Ok(GeneratedFile {
@@ -90,14 +87,6 @@ pub fn expand(invocation: &Invocation<'_>) -> Result<Vec<GeneratedFile>> {
             })
         })
         .collect()
-}
-
-/// Where in the document a failure happened, in the terms the author reads.
-fn where_it_is(invocation: &Invocation<'_>, line: usize) -> String {
-    format!(
-        "in {} group {}, definition fence on line {}, template fence on line {line}",
-        invocation.document, invocation.group.ordinal, invocation.group.definition.line
-    )
 }
 
 /// Refuses an output the named target does not generate [typediagram.output].
@@ -184,84 +173,78 @@ mod tests {
         assert!(files[1].text.contains("fences 1/3"), "{}", files[1].text);
     }
 
+    /// The refusal `run` produced, which it must have produced, proved to say
+    /// every one of `needles`.
+    fn refused(definition: &str, metadata: &str, template: &str, why: &str, needles: &[&str]) {
+        let error = format!("{:#}", run(definition, metadata, template).expect_err(why));
+        for needle in needles {
+            assert!(error.contains(needle), "{why}: {error}");
+        }
+    }
+
     /// [typediagram.output]: a template whose render is not valid Dart, or is
     /// Dart that generated code may not contain, fails before any write.
     #[test]
     fn invalid_or_unhygienic_output_is_refused() {
-        let error = format!(
-            "{:#}",
-            run(
-                "type A { x: Int }",
-                OUT,
-                "final class {{#declarations}}{{name}}{{/declarations}} {"
-            )
-            .expect_err("unbalanced Dart")
+        refused(
+            "type A { x: Int }",
+            OUT,
+            "final class {{#declarations}}{{name}}{{/declarations}} {",
+            "unbalanced Dart",
+            &["DMX4001", "template fence on line 5"],
         );
-        assert!(error.contains("DMX4001"), "{error}");
-        assert!(error.contains("template fence on line 5"), "{error}");
-
-        let error = format!(
-            "{:#}",
-            run(
-                "type A { x: Int }",
-                OUT,
-                "int probe(Object? v) => throw StateError('{{#declarations}}{{name}}{{/declarations}}');",
-            )
-            .expect_err("throwing Dart")
+        refused(
+            "type A { x: Int }",
+            OUT,
+            "int probe(Object? v) => throw StateError('{{#declarations}}{{name}}{{/declarations}}');",
+            "throwing Dart",
+            &["DMX4003", "never throws"],
         );
-        assert!(error.contains("DMX4003"), "{error}");
-        assert!(error.contains("never throws"), "{error}");
     }
 
     /// [typediagram.model]: a type the target cannot render fails before the
     /// template runs, naming the document line.
     #[test]
     fn an_unrenderable_type_fails_before_rendering() {
-        let error = format!(
-            "{:#}",
-            run("type A { at: Timestamp }", OUT, "// {{name}}").expect_err("unknown type")
+        refused(
+            "type A { at: Timestamp }",
+            OUT,
+            "// {{name}}",
+            "unknown type",
+            &["DMX8004", "unknown type 'Timestamp'"],
         );
-        assert!(error.contains("DMX8004"), "{error}");
-        assert!(error.contains("unknown type 'Timestamp'"), "{error}");
     }
 
     /// [typediagram.output]: a target only generates its own kind of file, and
     /// only targets dmx knows may be named.
     #[test]
     fn targets_and_extensions_are_checked() {
-        let error = format!(
-            "{:#}",
-            run(
-                "type A { x: Int }",
-                "{\"dmx\":{\"output\":\"lib/a.txt\"}}",
-                "// x"
-            )
-            .expect_err("not a Dart file")
+        refused(
+            "type A { x: Int }",
+            "{\"dmx\":{\"output\":\"lib/a.txt\"}}",
+            "// x",
+            "not a Dart file",
+            &["DMX8005", "does not end in `.dart`"],
         );
-        assert!(error.contains("DMX8005"), "{error}");
-        assert!(error.contains("does not end in `.dart`"), "{error}");
-
-        let error = format!(
-            "{:#}",
-            run(
-                "type A { x: Int }",
-                "{\"dmx\":{\"output\":\"lib/a.dart\",\"target\":\"kotlin\"}}",
-                "// x"
-            )
-            .expect_err("no such target")
+        refused(
+            "type A { x: Int }",
+            "{\"dmx\":{\"output\":\"lib/a.dart\",\"target\":\"kotlin\"}}",
+            "// x",
+            "no such target",
+            &["DMX8007"],
         );
-        assert!(error.contains("DMX8007"), "{error}");
     }
 
     /// [typediagram.templates]: a template that does not compile names the
     /// document, the group, and its own fence.
     #[test]
     fn a_broken_template_names_where_it_is() {
-        let error = format!(
-            "{:#}",
-            run("type A { x: Int }", OUT, "{{> nowhere}}").expect_err("unresolvable partial")
+        refused(
+            "type A { x: Int }",
+            OUT,
+            "{{> nowhere}}",
+            "unresolvable partial",
+            &["DMX8008", "docs/a.dmx.md group 1"],
         );
-        assert!(error.contains("DMX8008"), "{error}");
-        assert!(error.contains("docs/a.dmx.md group 1"), "{error}");
     }
 }

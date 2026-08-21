@@ -1,7 +1,7 @@
-// dmx: generated from docs/shipping.dmx.md — do not edit.
-// dmx: group 1, fences 1/3, definition bd16c86d530f3daa, template 6737510090829881, context v1, dmx 0.0.0.
+// dmx: generated from models/shipping.td — do not edit.
+// dmx: rendered through models/shipping.wire.mustache, definition bd16c86d530f3daa, template 40b2301c361563df, context v1, dmx 0.0.0.
 
-// Generated from docs/shipping.dmx.md. Edit the diagram, not this file.
+// Generated from models/shipping.td. Edit the definition, not this file.
 
 /// The wire name of every field, keyed by declaration and then by Dart name.
 const shippingWireNames = <String, Map<String, String>>{

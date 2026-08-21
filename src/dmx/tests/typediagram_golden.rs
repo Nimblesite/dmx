@@ -6,15 +6,19 @@
 //! holds that emitting Dart which does not compile is the worst failure
 //! available to it.
 //!
-//! So each fixture is wrapped in a real `*.dmx.md` document over one shared
-//! template, run through the real `dmx` binary, and compared byte for byte with
+//! So the whole corpus is laid out as standalone `models/<name>.td` files
+//! [typediagram.standalone] with nothing beside them, run through the real
+//! `dmx` binary in one `dmx build`, and compared byte for byte with
 //! `tests/typediagram/golden/lib/<name>.dart`. Those files are committed, and
 //! `make corpus` runs `dart analyze --fatal-infos` over the package holding
 //! them — so the corpus is checked as source, not just as JSON.
 //!
-//! The definitions are never copied. The document is assembled from the `.td`
-//! file at test time, so the parity corpus stays the one place a definition is
-//! written and the two suites can never drift apart.
+//! Nothing is wrapped, assembled, or extracted, and no template is written
+//! here at all: the `.td` files are copied out of the parity corpus byte for
+//! byte and render through the canonical model template dmx ships
+//! [typediagram.canonical]. That makes this suite the canonical template's
+//! own gate — every shape typeDiagram can express, held to Dart the analyzer
+//! accepts.
 //!
 //! Hygiene is not re-asserted here. The binary refuses to write source
 //! carrying `throw`, an `as` cast or a `!` assertion at all, and
@@ -45,6 +49,7 @@
 
 mod support;
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -77,6 +82,12 @@ fn corpus_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/typediagram/corpus")
 }
 
+/// The Dart file name a fixture generates, which is its own name spelled the
+/// way Dart spells a source file [typediagram.standalone].
+fn dart_name(name: &str) -> String {
+    name.replace('-', "_")
+}
+
 fn read(path: &Path) -> String {
     fs::read_to_string(path).unwrap_or_else(|error| panic!("read {}: {error}", path.display()))
 }
@@ -89,67 +100,63 @@ fn normalised(source: &str) -> String {
     )
 }
 
-/// The `*.dmx.md` document one fixture is generated from.
+/// Runs the binary over a throwaway package holding the whole corpus as
+/// standalone definitions, and returns the Dart it wrote for each fixture.
 ///
-/// The definition is the `.td` file verbatim and the template is
-/// `golden/template.mustache` verbatim, so neither is written twice.
-fn document(name: &str, definition: &str, template: &str) -> String {
-    format!(
-        "# {name}\n\nGenerated from the parity corpus fixture of the same name.\n\n\
-         ```typeDiagram\n{definition}```\n\n\
-         ```mustache {{\"dmx\":{{\"output\":\"lib/{name}.dart\"}}}}\n{template}```\n"
-    )
-}
-
-/// Runs the binary over a throwaway package holding one fixture's document and
-/// returns the Dart it wrote.
-fn generate(name: &str, template: &str) -> String {
+/// One package and one invocation: every `.td` is found by the same recursive
+/// sweep a real project gets, and every one of them renders through the
+/// canonical model template, because nothing sits beside it
+/// [typediagram.canonical].
+fn generate() -> BTreeMap<&'static str, String> {
     let workspace = TempDirectory::create("dmx-td-golden").expect("scratch directory");
     let _ = workspace
-        .write(
-            "pubspec.yaml",
-            "name: dmx_typediagram_golden\npublish_to: none\nenvironment:\n  sdk: ^3.6.0\n",
-        )
+        .write("pubspec.yaml", &read(&golden_dir().join("pubspec.yaml")))
         .expect("pubspec");
-    let definition = read(&corpus_dir().join(format!("{name}.td")));
-    let _ = workspace
-        .write(
-            &format!("docs/{name}.dmx.md"),
-            &document(name, &definition, template),
-        )
-        .expect("document");
+    for name in FIXTURES {
+        let _ = workspace
+            .write(
+                &format!("models/{name}.td"),
+                &read(&corpus_dir().join(format!("{name}.td"))),
+            )
+            .expect("definition");
+    }
 
     let output = Command::new(env!("CARGO_BIN_EXE_dmx"))
-        .args(["build", "docs", "lib"])
+        .args(["build", "models", "lib"])
         .current_dir(&workspace.path)
         .output()
         .expect("run dmx");
     assert!(
         output.status.success(),
-        "{name}: dmx build failed\nstdout:\n{}\nstderr:\n{}",
+        "dmx build failed\nstdout:\n{}\nstderr:\n{}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let written = workspace.at(&format!("lib/{name}.dart"));
-    assert!(
-        written.exists(),
-        "{name}: nothing was written to lib/{name}.dart\nstdout:\n{}",
-        String::from_utf8_lossy(&output.stdout)
-    );
-    normalised(&read(&written))
+    FIXTURES
+        .iter()
+        .map(|name| {
+            let written = workspace.at(&format!("lib/{}.dart", dart_name(name)));
+            assert!(
+                written.exists(),
+                "{name}: nothing was written to lib/{}.dart\nstdout:\n{}",
+                dart_name(name),
+                String::from_utf8_lossy(&output.stdout)
+            );
+            (*name, normalised(&read(&written)))
+        })
+        .collect()
 }
 
 /// [typediagram.output]: every corpus definition renders to the committed Dart,
 /// byte for byte, through the shipped binary.
 #[test]
 fn every_corpus_fixture_generates_its_golden_dart() {
-    let template = read(&golden_dir().join("template.mustache"));
     let updating = std::env::var_os("UPDATE_GOLDEN").is_some();
 
-    for name in FIXTURES {
-        let actual = generate(name, &template);
-        let expected_path = golden_dir().join(format!("lib/{name}.dart"));
+    for (name, actual) in generate() {
+        let file = format!("lib/{}.dart", dart_name(name));
+        let expected_path = golden_dir().join(&file);
 
         if updating {
             fs::write(&expected_path, &actual).expect("write golden");
@@ -159,7 +166,7 @@ fn every_corpus_fixture_generates_its_golden_dart() {
         let expected = read(&expected_path);
         assert_eq!(
             actual, expected,
-            "{name}: generated Dart no longer matches tests/typediagram/golden/lib/{name}.dart. \
+            "{name}: generated Dart no longer matches tests/typediagram/golden/{file}. \
              Re-run with UPDATE_GOLDEN=1 if the change is deliberate."
         );
     }
@@ -171,97 +178,237 @@ fn every_corpus_fixture_generates_its_golden_dart() {
 /// The byte comparison above proves the output is *stable*; it cannot notice
 /// that a section stopped matching and quietly rendered nothing. These are the
 /// constructs no other suite in the repo generates.
+/// Every construct the corpus exists to cover: the golden that must carry it,
+/// what it is, and the text that proves it survived. A row that stops matching
+/// names the construct that went missing rather than a line number.
+const CONSTRUCTS: &[(&str, &str, &[&str])] = &[
+    (
+        "lib/unions.dart",
+        "a tuple variant, under a name Dart can compile",
+        &["const Triple({required this.value1, required this.value2, required this.value3})"],
+    ),
+    (
+        "lib/unions.dart",
+        "a generic union, with its cases parameterised by the union's own list",
+        &[
+            "final class Some<T> extends Option<T>",
+            "final class Err<T, E> extends Result<T, E>",
+        ],
+    ),
+    (
+        "lib/unions.dart",
+        "explicit discriminants, the digit-separated one included",
+        &[
+            "static const int discriminant = -32700;",
+            "static const int discriminant = 1_000;",
+        ],
+    ),
+    (
+        "lib/unions.dart",
+        "the untagged union, marked as told apart by shape",
+        &["told apart by shape"],
+    ),
+    (
+        "lib/unions.dart",
+        "cases named as the diagram names them [typediagram.canonical.names]",
+        &[
+            "final class Circle extends Shape {",
+            "final class Left extends Loose {",
+            "final class Number extends RequestId {",
+        ],
+    ),
+    (
+        "lib/unions.dart",
+        "a colliding case name qualified by its union — `Ok` belongs to two \
+         unions here, and `String` is Dart's own",
+        &[
+            "final class ErrorCodeOk extends ErrorCode {",
+            "final class ResultOk<T, E> extends Result<T, E> {",
+            "final class RequestIdString extends RequestId {",
+        ],
+    ),
+    (
+        "lib/aliases_and_functions.dart",
+        "the generic function typedef",
+        &["typedef Fetch<T> = Response Function(Request request, T? fallback);"],
+    ),
+    (
+        "lib/aliases_and_functions.dart",
+        "overloads, written out one typedef each",
+        &[
+            "typedef Read0 = List<int> Function(String path);",
+            "typedef Read1 = Future<List<int>> Function(String path, double timeout);",
+        ],
+    ),
+    (
+        "lib/aliases_and_functions.dart",
+        "an async single-signature function, which is a Future",
+        &["typedef Store = Future<void> Function(Request item);"],
+    ),
+    (
+        "lib/aliases_and_functions.dart",
+        "the generic alias",
+        &["typedef Index<K> = Map<K, List<Email>>;"],
+    ),
+    (
+        "lib/scalars.dart",
+        "the scalar mapping table, field by field",
+        &[
+            "final bool flag;",
+            "final int count;",
+            "final double ratio;",
+            "final List<int> blob;",
+            "final void nothing;",
+            "final DateTime at;",
+            "final Object anything;",
+            "final Map<String, List<String?>> index;",
+            "final Map<Uuid, List<Object>>? deep;",
+        ],
+    ),
+    (
+        "lib/scalars.dart",
+        "a declaration shadowing a primitive, with the field on the declared name",
+        &["typedef Uuid = String;", "final Uuid id;"],
+    ),
+    (
+        "lib/records.dart",
+        "an empty record, which takes no parameter list",
+        &["const Empty();"],
+    ),
+    (
+        "lib/records.dart",
+        "generic records",
+        &["final class Pair<A, B> {"],
+    ),
+    (
+        "lib/targeting.dart",
+        "every declaration the dart target selects",
+        &["class OnlyDartAndRust", "class NotGo", "sealed class Both"],
+    ),
+];
+
+/// The shapes that must never appear: typeDiagram's positional member names
+/// are not Dart identifiers, and a case qualifies only on a collision.
+const REFUSED: &[(&str, &str, &str)] = &[
+    (
+        "lib/unions.dart",
+        "this._0",
+        "a private member reached Dart",
+    ),
+    (
+        "lib/unions.dart",
+        "ShapeCircle",
+        "a case was qualified for no reason",
+    ),
+];
+
 #[test]
 fn the_goldens_cover_the_shapes_the_corpus_exists_for() {
-    let unions = read(&golden_dir().join("lib/unions.dart"));
-    // A tuple variant, under a name Dart can compile — see
-    // `tuple_members_are_named_for_the_target_not_for_the_model`.
-    assert!(
-        unions.contains("const RequestIdTriple({required this.value1, required this.value2, required this.value3})"),
-        "tuple variants missing from unions.dart"
-    );
-    assert!(!unions.contains("this._0"), "a private member reached Dart");
-    // A generic union, with its cases parameterised by the union's own list.
-    assert!(
-        unions.contains("final class OptionSome<T> extends Option<T>"),
-        "generic union cases missing from unions.dart"
-    );
-    assert!(
-        unions.contains("final class ResultErr<T, E> extends Result<T, E>"),
-        "multi-parameter generic union cases missing from unions.dart"
-    );
-    // Explicit discriminants, including the digit-separated one.
-    assert!(
-        unions.contains("static const int discriminant = -32700;")
-            && unions.contains("static const int discriminant = 1_000;"),
-        "discriminants missing from unions.dart"
-    );
-    assert!(
-        unions.contains("told apart by shape"),
-        "the untagged union is not marked in unions.dart"
-    );
+    for (file, construct, needles) in CONSTRUCTS {
+        let source = read(&golden_dir().join(file));
+        for needle in *needles {
+            assert!(
+                source.contains(needle),
+                "{file} lost {construct}: no `{needle}`"
+            );
+        }
+    }
 
-    let functions = read(&golden_dir().join("lib/aliases-and-functions.dart"));
-    assert!(
-        functions.contains("typedef Fetch<T> = Response Function(Request request, T? fallback);"),
-        "the generic function typedef is missing"
-    );
-    assert!(
-        functions.contains("typedef Read0 = List<int> Function(String path);")
-            && functions.contains(
-                "typedef Read1 = Future<List<int>> Function(String path, double timeout);"
-            ),
-        "overloads are not written out one typedef each"
-    );
-    assert!(
-        functions.contains("typedef Store = Future<void> Function(Request item);"),
-        "an async single-signature function is not a Future"
-    );
-    assert!(
-        functions.contains("typedef Index<K> = Map<K, List<Email>>;"),
-        "the generic alias is missing"
-    );
+    for (file, refused, why) in REFUSED {
+        assert!(
+            !read(&golden_dir().join(file)).contains(refused),
+            "{file}: {why}"
+        );
+    }
+}
 
-    let scalars = read(&golden_dir().join("lib/scalars.dart"));
+/// [typediagram.canonical]: the classes the canonical template writes are
+/// values, and their JSON is beside them rather than in them.
+///
+/// This is the whole point of there being one model template. A record and a
+/// union case are the same kind of thing — an immutable value — so both get
+/// `==`, `hashCode`, `toString` and `copyWith`; and neither carries a codec,
+/// because a class the diagram described should read as what the diagram said
+/// and nothing else.
+#[test]
+fn every_generated_class_is_a_value_with_its_json_beside_it() {
+    let records = read(&golden_dir().join("lib/records.dart"));
     for expected in [
-        "final bool flag;",
-        "final int count;",
-        "final double ratio;",
-        "final List<int> blob;",
-        "final void nothing;",
-        "final DateTime at;",
-        "final Object anything;",
-        "final Map<String, List<String?>> index;",
-        "final Map<Uuid, List<Object>>? deep;",
+        "bool operator ==(Object other) =>",
+        "          dmx.dmxDeepEquals(other.roles, roles) &&",
+        "int get hashCode => Object.hash(",
+        "        dmx.dmxDeepHash(roles),",
+        "String toString() => 'User(id: $id, name: $name, email: $email, roles: $roles, \
+         address: $address)';",
+        "  User copyWith({",
+        "extension UserJson on User {",
+        "  static dmx.Result<User, dmx.DecodeError> fromJson(Object? json, [String path = 'User']) =>",
+        "  Map<String, Object?> toJson() => <String, Object?>{",
+        // The nested decode reaches the *extension*, not the class.
+        "AddressJson.fromJson(address, '$path.address')",
     ] {
         assert!(
-            scalars.contains(expected),
-            "scalars.dart is missing `{expected}`"
+            records.contains(expected),
+            "records.dart is missing `{expected}`"
         );
     }
-    // A declaration shadows a primitive, and the field takes the declared name.
-    assert!(
-        scalars.contains("typedef Uuid = String;") && scalars.contains("final Uuid id;"),
-        "the shadowing alias is not honoured in scalars.dart"
-    );
-
-    let records = read(&golden_dir().join("lib/records.dart"));
-    assert!(
-        records.contains("const Empty();"),
-        "an empty record must take no parameter list"
-    );
-    assert!(
-        records.contains("final class Pair<A, B> {"),
-        "generic records are missing"
-    );
-
-    let targeting = read(&golden_dir().join("lib/targeting.dart"));
-    for expected in ["class OnlyDartAndRust", "class NotGo", "sealed class Both"] {
+    for (file, class) in [
+        ("lib/records.dart", "final class User {"),
+        ("lib/unions.dart", "final class Circle extends Shape {"),
+        ("lib/targeting.dart", "final class OnlyDartAndRust {"),
+    ] {
+        let body = class_body(&read(&golden_dir().join(file)), class);
         assert!(
-            targeting.contains(expected),
-            "targeting.dart dropped `{expected}`, which the dart target selects"
+            !body.contains("Json") && !body.contains("toJson"),
+            "{file}: `{class}` carries JSON members:\n{body}"
         );
     }
+
+    // A case decodes by its tag, and the union it belongs to dispatches on one.
+    let unions = read(&golden_dir().join("lib/unions.dart"));
+    assert!(
+        unions.contains("extension ShapeJson on Shape {")
+            && unions.contains("'circle' => CircleJson.fromJson(json, path),")
+            && unions.contains("            'type': 'circle',"),
+        "the union's own codec is missing from unions.dart"
+    );
+    // The diagram declares `Result`, `Ok` and `Err` itself. A prefixed import
+    // is what stops the codec resolving to them [typediagram.canonical].
+    assert!(
+        unions.contains("import 'package:dmx/dmx.dart' as dmx;")
+            && unions.contains("sealed class Result<T, E> {")
+            && unions.contains("dmx.Result<Circle, dmx.DecodeError>"),
+        "unions.dart does not keep the runtime and the diagram's own names apart"
+    );
+
+    // `Unit` is Dart's `void`, which is not a value: it takes part in no
+    // comparison, no `toString`, no `copyWith`, and no codec.
+    let scalars = read(&golden_dir().join("lib/scalars.dart"));
+    assert!(
+        scalars.contains("final void nothing;")
+            && !scalars.contains("nothing: $nothing")
+            && !scalars.contains("extension"),
+        "scalars.dart tried to give `void` value semantics"
+    );
+
+    // A generic declaration has no codec, because a codec for `T` is not known
+    // until `T` is. It is still a value.
+    assert!(
+        records.contains("(other is Pair<A, B> &&") && !records.contains("extension PairJson"),
+        "records.dart got the generic case wrong"
+    );
+}
+
+/// The text between a class header and the brace that closes it at column
+/// zero, which is what generated Dart puts there.
+fn class_body(source: &str, header: &str) -> String {
+    source
+        .split_once(header)
+        .and_then(|(_, rest)| rest.split_once("\n}\n"))
+        .map_or_else(
+            || panic!("no class body for `{header}`"),
+            |(body, _)| body.to_owned(),
+        )
 }
 
 /// [typediagram.output]: every generated file carries the ownership marker the
@@ -269,19 +416,21 @@ fn the_goldens_cover_the_shapes_the_corpus_exists_for() {
 #[test]
 fn every_golden_is_marked_as_generated() {
     for name in FIXTURES {
-        let source = read(&golden_dir().join(format!("lib/{name}.dart")));
-        let first = source.lines().next().unwrap_or_default();
+        let source = read(&golden_dir().join(format!("lib/{}.dart", dart_name(name))));
+        let mut lines = source.lines();
         assert_eq!(
-            first,
-            format!("// dmx: generated from docs/{name}.dmx.md — do not edit.")
+            lines.next().unwrap_or_default(),
+            format!("// dmx: generated from models/{name}.td — do not edit.")
+        );
+        let identity = lines.next().unwrap_or_default();
+        assert!(
+            identity
+                .starts_with("// dmx: rendered through the canonical model template, definition "),
+            "{name}: the identity line does not name the template: {identity}"
         );
         assert!(
-            source
-                .lines()
-                .nth(1)
-                .unwrap_or_default()
-                .contains("context v1"),
-            "{name}: the identity line is missing"
+            identity.contains("context v1"),
+            "{name}: the identity line is missing the context version"
         );
     }
 }

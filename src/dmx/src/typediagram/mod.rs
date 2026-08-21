@@ -1,19 +1,25 @@
 //! The built-in `typeDiagram` macro [typediagram].
 //!
-//! typeDiagram definitions plus Mustache templates equal generated code. The
-//! definitions live in an ordinary Markdown document that typeDiagram's own
-//! tooling still renders; the templates live beside them; dmx owns everything
-//! in between — parsing, resolution, context, rendering, validation, and safe
-//! emission — and never runs typeDiagram's CLI, library, or language emitters
-//! [typediagram.delivery.baseline].
+//! A typeDiagram definition plus a Mustache template equals generated code,
+//! and there are two ways to write that down. A `.td` file is a definition and
+//! no wrapper [typediagram.standalone]: it renders through the canonical model
+//! template dmx ships [typediagram.canonical] unless a `.mustache` beside it
+//! says otherwise, and any further template beside it is a further output. A
+//! `.dmx.md` document keeps definition and templates inside prose that
+//! typeDiagram's own tooling still renders [typediagram.documents]. Either way
+//! dmx owns everything in between — parsing, resolution, context, rendering,
+//! validation, and safe emission — and never runs typeDiagram's CLI, library,
+//! or language emitters [typediagram.delivery.baseline].
 //!
-//! The pipeline is the ordinary one. The Markdown front end synthesizes one
-//! [`Invocation`] per generation group and dispatches it through the same
-//! macro registry an `@dmx('model')` annotation goes through
+//! The pipeline is the ordinary one, and there is exactly one of it. Both
+//! front ends build the same [`binding::Group`]; [`run`] resolves it,
+//! synthesizes one [`Invocation`] per group, and dispatches it through the
+//! same macro registry an `@dmx('model')` annotation goes through
 //! [typediagram.macro]; what comes back is whole files, emitted by the same
 //! ownership protocol a Dart-authored macro's siblings use [dartmacros.files].
 
 pub mod ast;
+pub mod binding;
 pub mod context;
 pub mod diagnostic;
 #[cfg(not(target_arch = "wasm32"))]
@@ -24,14 +30,26 @@ pub mod json;
 pub mod lexer;
 pub mod markdown;
 pub mod model;
+pub mod naming;
 pub mod parser;
+pub mod prepared;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod run;
+#[cfg(test)]
+pub mod scratch;
+pub mod semantics;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod standalone;
 pub mod target;
 
 use anyhow::Result;
 
+use binding::{BoundTemplate, Group};
 use diagnostic::Diagnostics;
-use markdown::{BoundTemplate, Group};
 use model::Model;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub use standalone::{definition_of, is_definition, is_template};
 
 /// The file-name suffix that makes a Markdown document one dmx generates from
 /// [typediagram.documents].
@@ -81,19 +99,17 @@ pub fn ownership_marker(document: &str) -> String {
     crate::emit::file_marker(document)
 }
 
-/// The second line: which group, which fences, and the content that produced
-/// the file [typediagram.output].
+/// The second line: which binding, and the content that produced the file
+/// [typediagram.output].
 ///
-/// The digests are what make drift visible without reading the whole document.
-/// A definition or template edit changes them; prose outside the group does
-/// not, which is exactly the dependency rule [typediagram.execution] states.
+/// The digests are what make drift visible without reading the whole source. A
+/// definition or template edit changes them; prose outside the group does not,
+/// which is exactly the dependency rule [typediagram.execution] states.
 #[must_use]
 pub fn identity_line(group: &Group, template: &BoundTemplate) -> String {
     format!(
-        "// dmx: group {}, fences {}/{}, definition {}, template {}, context v{}, dmx {}.",
-        group.ordinal,
-        group.definition.ordinal,
-        template.fence.ordinal,
+        "// dmx: {}, definition {}, template {}, context v{}, dmx {}.",
+        group.identity(template),
         digest(&group.definition.body),
         digest(&template.fence.body),
         context::CONTEXT_VERSION,
@@ -131,10 +147,8 @@ pub fn file_text(document: &str, group: &Group, template: &BoundTemplate, body: 
 pub fn resolve(document: &str, group: &Group) -> Result<Model> {
     let fault = |found: Diagnostics| {
         anyhow::anyhow!(
-            "DMX8004 [typediagram.model]: the typeDiagram definition in {document} (fence {}, \
-             line {}) is not valid:\n{}",
-            group.definition.ordinal,
-            group.definition.line,
+            "DMX8004 [typediagram.model]: the typeDiagram definition in {} is not valid:\n{}",
+            group.definition_at(document),
             found.in_document(group.definition.line)
         )
     };

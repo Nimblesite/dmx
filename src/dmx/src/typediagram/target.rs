@@ -12,7 +12,7 @@
 
 use anyhow::{Result, bail};
 
-use super::ast::TypeRef;
+use super::ast::{Decl, TypeRef};
 use super::model::{Model, Resolution};
 
 /// Everything the pipeline needs to know about one output language.
@@ -21,14 +21,25 @@ pub struct Target {
     pub name: &'static str,
     /// The extension every output it generates must carry, without the dot.
     pub extension: &'static str,
+    /// The directory this language keeps its sources in, relative to the
+    /// project root — where a standalone template's output lands when the
+    /// template names no path of its own [typediagram.standalone].
+    pub source_root: &'static str,
     /// The file that marks a project root in this language, which is what an
     /// output path is resolved against [typediagram.output].
     pub project_marker: &'static str,
     /// This language's text for one resolved reference.
     pub type_text: fn(&TypeRef, &Model) -> Result<String>,
+    /// This language's text for a reference the JSON codec table has to work
+    /// in, or a refusal when the reference has no codec [typediagram.canonical].
+    pub codec_text: fn(&TypeRef, &Model) -> Result<String>,
     /// Refuses a finished file that does not parse, or that generated code is
     /// not allowed to contain [hygiene].
     pub validate: fn(&str, &str) -> Result<()>,
+    /// The canonical model template for this language: what a definition
+    /// renders through when no template beside it says otherwise
+    /// [typediagram.canonical].
+    pub canonical: &'static str,
 }
 
 /// A target is mostly function pointers, which carry nothing a diagnostic
@@ -46,9 +57,12 @@ impl std::fmt::Debug for Target {
 const TARGETS: &[Target] = &[Target {
     name: "dart",
     extension: "dart",
+    source_root: "lib",
     project_marker: "pubspec.yaml",
     type_text: dart_type,
+    codec_text: dart_codec_type,
     validate: validate_dart,
+    canonical: include_str!("../../templates/diagram_model.mustache"),
 }];
 
 /// Every file that marks a project root, for any target this build carries
@@ -121,6 +135,65 @@ fn dart_type(reference: &TypeRef, model: &Model) -> Result<String> {
         Resolution::TypeParam => Ok(reference.name.clone()),
         Resolution::Declared(name) => Ok(applied(name, &args)),
         Resolution::Primitive => Ok(primitive(&reference.name).to_owned()),
+        Resolution::External => container(reference, &args),
+    }
+}
+
+/// The Dart text the JSON codec table works in [typediagram.canonical].
+///
+/// The same mapping as [`dart_type`] with two differences, both of them about
+/// what a codec can actually be built for.
+///
+/// An alias is followed to what it stands for. `alias Email = String` makes
+/// `Email` a Dart typedef, and a typedef is not a name the codec table can look
+/// up — it has to see the `String` underneath. A record or a union keeps its
+/// own name, because that name is exactly what its codec is filed under.
+///
+/// Everything else is refused rather than guessed. A type parameter has no
+/// codec because the diagram never says what it will be; a generic declaration
+/// has none for the same reason; an untagged union has none because nothing in
+/// the payload says which case it is; and `Unit` is Dart's `void`, which is not
+/// a value at all. A refusal here costs the declaration its JSON extension and
+/// nothing else — the class, its value semantics, and `copyWith` are unaffected.
+///
+/// # Errors
+///
+/// Fails when the reference has no JSON codec, naming what it was.
+fn dart_codec_type(reference: &TypeRef, model: &Model) -> Result<String> {
+    let args = reference
+        .args
+        .iter()
+        .map(|arg| dart_codec_type(arg, model))
+        .collect::<Result<Vec<_>>>()?;
+    let no_codec = |what: &str| {
+        bail!(
+            "DMX8009 [typediagram.canonical]: `{}` has no JSON codec: {what}",
+            reference.canonical()
+        )
+    };
+    match model.resolution(reference) {
+        Resolution::TypeParam => no_codec("a type parameter is not known until it is applied"),
+        Resolution::Declared(name) => match model.declaration(name) {
+            Some(Decl::Alias(alias)) if alias.generics.is_empty() => {
+                dart_codec_type(&alias.target, model)
+            }
+            Some(Decl::Record(record)) if record.generics.is_empty() => Ok(applied(name, &args)),
+            Some(Decl::Union(union)) if union.generics.is_empty() && !union.untagged => {
+                Ok(applied(name, &args))
+            }
+            Some(Decl::Union(union)) if union.untagged => {
+                let _ = union;
+                no_codec("an untagged union carries nothing that says which case a payload is")
+            }
+            Some(Decl::Function(_)) => no_codec("a function is not data"),
+            // A generic alias, record, or union, or a name this model does not
+            // declare at all — which resolution already proved it does.
+            _ => no_codec("a generic declaration has no codec until it is applied"),
+        },
+        Resolution::Primitive => match primitive(&reference.name) {
+            "void" => no_codec("`Unit` is Dart's `void`, which is not a value"),
+            text => Ok(text.to_owned()),
+        },
         Resolution::External => container(reference, &args),
     }
 }

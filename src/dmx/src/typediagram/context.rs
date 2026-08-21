@@ -17,10 +17,19 @@ use anyhow::Result;
 use serde_json::{Map, Value, json};
 
 use super::ast::{Decl, Field, Signature, TypeRef, Variant};
-use super::markdown::{BoundTemplate, Group};
+use super::binding::{BoundTemplate, Group};
 use super::model::{Model, Resolution};
+use super::naming::Names;
+use super::prepared::{
+    constructor_parameters, generic_list, named, parameter, parameter_list, positioned, put,
+};
+use super::semantics::{self, Class};
 use super::target::Target;
 use crate::casing;
+
+/// The JSON key a union's payload carries its case's tag under, matching what
+/// `@dmx('union')` writes when nobody names another [catalogue.macros].
+const DISCRIMINATOR: &str = "type";
 
 /// The context schema version. A change to the shape below bumps it, and the
 /// golden fixtures move in the same commit [typediagram.model].
@@ -40,15 +49,20 @@ pub fn build(
     model: &Model,
     target: &Target,
 ) -> Result<Value> {
+    let names = Names::of(model, target.name)?;
     let declarations = model
         .visible(target.name)
-        .map(|decl| declaration(decl, model, target))
+        .map(|decl| declaration(decl, &names, model, target))
         .collect::<Result<Vec<_>>>()?;
+    let declarations = positioned(declarations);
     Ok(json!({
         "modelVersion": CONTEXT_VERSION,
         "target": target.name,
+        "runtimeImport": semantics::RUNTIME_IMPORT,
+        "needsRuntime": declarations.iter().any(needs_runtime),
         "source": {
             "path": document,
+            "template": template.source.label(),
             "group": group.ordinal,
             "definitionFence": group.definition.ordinal,
             "definitionLine": group.definition.line,
@@ -56,22 +70,32 @@ pub fn build(
             "templateLine": template.fence.line,
             "output": template.output,
         },
-        "declarations": positioned(declarations),
+        "declarations": declarations,
     }))
 }
 
-/// Adds one prepared value to a context object.
+/// Whether one declaration renders anything that reaches the dmx runtime
+/// [typediagram.canonical].
 ///
-/// `Map::insert` returns whatever it displaced, which is never anything here
-/// and which `unused_results` obliges every caller to discard. Written out, the
-/// builders below would be `let _ =` noise wrapped around the one thing that
-/// matters — the name and the value.
-fn put(out: &mut Map<String, Value>, name: &str, value: impl Into<Value>) {
-    drop(out.insert(name.to_owned(), value.into()));
+/// A union answers for its variants: the sealed class itself places nothing,
+/// and the classes underneath it place everything.
+fn needs_runtime(decl: &Value) -> bool {
+    let flag =
+        |value: &Value, name: &str| value.get(name).and_then(Value::as_bool).unwrap_or_default();
+    flag(decl, "usesRuntime")
+        || decl
+            .get("variants")
+            .and_then(Value::as_array)
+            .is_some_and(|variants| variants.iter().any(|variant| flag(variant, "usesRuntime")))
 }
 
 /// One declaration, with the flags and members its kind carries.
-fn declaration(decl: &Decl, model: &Model, target: &Target) -> Result<Map<String, Value>> {
+fn declaration(
+    decl: &Decl,
+    names: &Names,
+    model: &Model,
+    target: &Target,
+) -> Result<Map<String, Value>> {
     let mut out = named(decl.name());
     let generics = decl.generics();
     put(&mut out, "kind", kind_name(decl));
@@ -94,7 +118,19 @@ fn declaration(decl: &Decl, model: &Model, target: &Target) -> Result<Map<String
     match decl {
         Decl::Record(record) => {
             put(&mut out, "hasFields", !record.fields.is_empty());
-            members(&mut out, "fields", &record.fields, model, target)?;
+            let class = Class {
+                name: record.name.clone(),
+                ty: format!("{}{}", record.name, generic_list(generics)),
+                generic: !generics.is_empty(),
+                fields: &record.fields,
+            };
+            // A record extends nothing and delegates to nobody, which is what
+            // lets one template block write a record and a union case alike.
+            put(&mut out, "superClause", "");
+            put(&mut out, "superCall", "");
+            members(&mut out, "fields", &class, model, target)?;
+            let view = Value::Object(out.clone());
+            classes(&mut out, vec![view]);
         }
         Decl::Union(union) => {
             put(&mut out, "untagged", union.untagged);
@@ -106,9 +142,34 @@ fn declaration(decl: &Decl, model: &Model, target: &Target) -> Result<Map<String
             let variants = union
                 .variants
                 .iter()
-                .map(|variant| self::variant(variant, &owner, model, target))
+                .map(|variant| self::variant(variant, &owner, names, model, target))
                 .collect::<Result<Vec<_>>>()?;
-            put(&mut out, "variants", positioned(variants));
+            // A union decodes by reading its cases' tag, so it has a codec
+            // exactly when every case has one and something in the payload says
+            // which case it is [typediagram.canonical].
+            let decodable = !union.untagged
+                && generics.is_empty()
+                && variants.iter().all(|variant| {
+                    variant
+                        .get("hasJson")
+                        .and_then(Value::as_bool)
+                        .unwrap_or_default()
+                });
+            put(
+                &mut out,
+                "discriminator",
+                casing::dart_string(DISCRIMINATOR),
+            );
+            semantics::codec_names(
+                &mut out,
+                decodable,
+                &union.name,
+                &owner.applied(),
+                union.variants.is_empty(),
+            );
+            let variants = positioned(variants);
+            classes(&mut out, variants.clone());
+            put(&mut out, "variants", variants);
         }
         Decl::Alias(alias) => {
             let typed = type_ref(&alias.target, model, target)?;
@@ -143,10 +204,18 @@ struct Owner<'a> {
     generic_declaration: String,
 }
 
+impl Owner<'_> {
+    /// The union's Dart type, type parameters included.
+    fn applied(&self) -> String {
+        format!("{}{}", self.name, self.generic_declaration)
+    }
+}
+
 /// One variant of a union, with its payload shape already decided.
 fn variant(
     variant: &Variant,
     owner: &Owner<'_>,
+    names: &Names,
     model: &Model,
     target: &Target,
 ) -> Result<Map<String, Value>> {
@@ -166,7 +235,27 @@ fn variant(
         "discriminant",
         variant.discriminant.clone().unwrap_or_default(),
     );
-    members(&mut out, "fields", &variant.fields, model, target)?;
+    // The tag the payload carries, spelled the way `@dmx('union')` spells one,
+    // so a diagram and an annotated sealed class agree on the wire.
+    put(
+        &mut out,
+        "tag",
+        casing::dart_string(&casing::camel(&variant.name)),
+    );
+    put(
+        &mut out,
+        "superClause",
+        format!(" extends {}", owner.applied()),
+    );
+    put(&mut out, "superCall", " : super()");
+    let name = names.case(owner.name, &variant.name);
+    let class = Class {
+        ty: format!("{name}{}", owner.generic_declaration),
+        name,
+        generic: !owner.generic_declaration.is_empty(),
+        fields: &variant.fields,
+    };
+    members(&mut out, "fields", &class, model, target)?;
     Ok(out)
 }
 
@@ -198,16 +287,27 @@ fn signature(
     Ok(out)
 }
 
+/// The classes one declaration writes out [typediagram.canonical].
+///
+/// A record is one class and a union is one per case, and a template that has
+/// to know which it is has to say everything twice. `classes` is that list,
+/// whichever kind produced it: the record itself, or its cases.
+fn classes(out: &mut Map<String, Value>, list: Vec<Value>) {
+    put(out, "hasClasses", !list.is_empty());
+    put(out, "classes", list);
+}
+
 /// Adds a member list under `name`, together with the constructor fragment it
 /// adds up to — the two things a record and a variant both need, in one place.
 fn members(
     out: &mut Map<String, Value>,
     name: &str,
-    source: &[Field],
+    class: &Class<'_>,
     model: &Model,
     target: &Target,
 ) -> Result<()> {
-    let members = fields(source, model, target)?;
+    let mut members = fields(class.fields, model, target)?;
+    semantics::place(out, &mut members, class, model, target)?;
     put(
         out,
         "constructorParameters",
@@ -327,86 +427,6 @@ fn kind_name(decl: &Decl) -> &'static str {
         Decl::Alias(_) => "alias",
         Decl::Function(_) => "function",
     }
-}
-
-/// A name in every casing a template might place it in
-/// [context.helpers].
-fn named(name: &str) -> Map<String, Value> {
-    let mut out = Map::new();
-    put(&mut out, "name", name);
-    put(&mut out, "camelName", casing::camel(name));
-    put(&mut out, "pascalName", casing::pascal(name));
-    put(&mut out, "snakeName", casing::snake(name));
-    put(
-        &mut out,
-        "screamingSnakeName",
-        casing::screaming_snake(name),
-    );
-    put(&mut out, "label", casing::label(name));
-    out
-}
-
-/// `<A, B>`, or the empty string when there are no parameters.
-fn generic_list(generics: &[String]) -> String {
-    if generics.is_empty() {
-        return String::new();
-    }
-    format!("<{}>", generics.join(", "))
-}
-
-/// The named-parameter list a constructor takes, braces included, or the empty
-/// string when there is nothing to take.
-fn constructor_parameters(fields: &[Map<String, Value>]) -> String {
-    let parts: Vec<&str> = fields
-        .iter()
-        .filter_map(|field| field.get("parameter").and_then(Value::as_str))
-        .collect();
-    if parts.is_empty() {
-        return String::new();
-    }
-    format!("{{{}}}", parts.join(", "))
-}
-
-/// One constructor parameter. An optional member has a default of `null`
-/// already, so requiring it would only make callers write it.
-fn parameter(name: &str, optional: bool) -> String {
-    if optional {
-        return format!("this.{name}");
-    }
-    format!("required this.{name}")
-}
-
-/// The positional parameter list a free function takes.
-fn parameter_list(params: &[Map<String, Value>]) -> String {
-    params
-        .iter()
-        .filter_map(|param| {
-            Some(format!(
-                "{} {}",
-                param.get("targetType")?.as_str()?,
-                param.get("name")?.as_str()?
-            ))
-        })
-        .collect::<Vec<_>>()
-        .join(", ")
-}
-
-/// Stamps `first`, `last`, and `comma` onto every member of a list, so a
-/// template lays out separators without counting [context.discipline].
-fn positioned(items: Vec<Map<String, Value>>) -> Vec<Value> {
-    let last = items.len().saturating_sub(1);
-    items
-        .into_iter()
-        .enumerate()
-        .map(|(index, mut item)| {
-            let final_item = index == last;
-            put(&mut item, "first", index == 0);
-            put(&mut item, "last", final_item);
-            put(&mut item, "index", index);
-            put(&mut item, "comma", if final_item { "" } else { "," });
-            Value::Object(item)
-        })
-        .collect()
 }
 
 // A separate file only because context.rs is at the 500-line ceiling.

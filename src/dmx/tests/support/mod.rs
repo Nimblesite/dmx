@@ -1,6 +1,9 @@
 //! A scratch directory that cleans itself up, shared by the test binaries that
 //! need real files on a real filesystem — which is all of them, because the
-//! thing under test is a program that reads and writes Dart sources.
+//! thing under test is a program that reads and writes source.
+//!
+//! The suites that also need a running `dmx watch` take `support/watch.rs`
+//! beside this, so no binary compiles a process harness it never spawns.
 
 // [TEST-RULES] admits `expect` in a test: a fixture that cannot be built is a
 // broken test, and unwinding at the point of failure names it better than any

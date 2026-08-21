@@ -32,9 +32,9 @@ dmx does not replace one fixed model shape with another. Teams encode their exac
 
 Custom macros and Mustache templates are one system, not competing options. A macro can return Dart directly, and a small one usually should. It can also hand its model to a Mustache template and let dmx render it with the same engine the built-ins use, which is how a project keeps generation logic and output shape in separate files: the macro answers questions only the project can answer, and the template decides what the emitted Dart looks like. The [OpenAPI example](../examples/dmx_openapi_example/README.md) reads a published API document and renders a typed client and its models through project-owned templates.
 
-Some models have no Dart file to annotate yet. A `*.dmx.md` document holds a [typeDiagram](https://typediagram.dev/docs/) definition and, immediately below it, the Mustache templates that generate from it. Save the document and dmx writes the `.dart` files those templates name. The definition still renders as a diagram in any typeDiagram viewer, so one page is the model, the documentation, and the build input. The [shipping document](../examples/storefront/docs/shipping.dmx.md) defines four types once and generates two different Dart files from them.
+Some models have no Dart file to annotate yet. Write the model once as a [typeDiagram](https://typediagram.dev/docs/) definition—`shipping.td`—and save. dmx writes one complete Dart file: immutable classes with `==`, `hashCode`, `toString`, and `copyWith`, a sealed class per union, and JSON on an extension beside each class rather than inside it. That comes from the canonical model template dmx ships—the same one every model class comes out of—and nothing is embedded in anything: the `.td` file is what any typeDiagram tool reads. Put a Mustache template beside the definition and it takes the canonical template's place; add another and you get another file. The [shipping example](../examples/storefront/models/README.md) defines four types once and generates two different Dart files from them. The definition and its templates can also live inside one `*.dmx.md` document, when the model, the diagram, and the prose explaining them belong on one page.
 
-> Save the file and keep coding. Use a built-in, change what it emits with a Mustache template, write a macro in Dart—and render a Mustache template from inside that macro too—or define the types in Markdown and let the templates write the Dart.
+> Save the file and keep coding. Use a built-in, change what it emits with a Mustache template, write a macro in Dart—and render a Mustache template from inside that macro too—or define the types in a diagram and let dmx write the Dart.
 
 ## Ready-to-use copy
 
@@ -50,13 +50,13 @@ Open the project, edit Dart, and save. dmx updates generated code automatically,
 
 [Try the real generator in your browser](https://dmx.dev/playground.html)—no install required.
 
-### Models in Markdown
+### Models from a diagram
 
-**Define the types once in a `*.dmx.md` document; the Mustache templates under the diagram write the Dart.** Save the document and every file it names updates—no annotated Dart source, no `part` file, and the diagram still renders.
+**Define the types once in a typeDiagram file and save; dmx writes the Dart.** Immutable classes that compare by value, with JSON beside them instead of inside them—no annotated Dart source, no `part` file, and the definition still renders as a diagram. Put a Mustache template beside it to decide the shape yourself, or put the definition and its templates in a `*.dmx.md` document to keep them on one page.
 
 ### Repository
 
-Fast Dart code generation on every save, with no generated `part` files: built-in macros, team-owned Mustache templates, custom Dart macros, models defined in Markdown, and validated inline output.
+Fast Dart code generation on every save, with no generated `part` files: built-in macros, team-owned Mustache templates, custom Dart macros, models defined in a typeDiagram file, and validated inline output.
 
 ## Message order
 
@@ -66,7 +66,7 @@ Fast Dart code generation on every save, with no generated `part` files: built-i
 4. **Useful immediately:** built-ins cover common models, unions, routes, clients, and more.
 5. **The team's shape:** Mustache controls the exact generated Dart.
 6. **Full custom macros:** inspect typed declaration data, read project data, and generate members or complete files—returning Dart directly, or rendering it through the same Mustache engine the built-ins use.
-7. **Models with no Dart to annotate:** a `*.dmx.md` document defines the types once and its Mustache templates generate the `.dart` files.
+7. **Models with no Dart to annotate:** a typeDiagram definition file generates the `.dart` file on its own, through the canonical model template or through a Mustache template beside it—or a `*.dmx.md` document does the same on one page.
 8. **Reliable writes:** validate complete Dart files before writing and preserve handwritten source on failure.
 
 ## Demo order
@@ -76,7 +76,7 @@ Fast Dart code generation on every save, with no generated `part` files: built-i
 3. Rename a field, save, and show generated members update immediately.
 4. Change a Mustache template and show the team's model shape appear.
 5. Add a SQLite table and show a complete Dart file appear.
-6. Add a field to a `*.dmx.md` diagram, save, and show both generated Dart files change together.
+6. Add a field to a typeDiagram definition, save, and show both generated Dart files change together—`==`, `hashCode`, `copyWith`, and the JSON extension all move with it.
 
 ## Positioning
 

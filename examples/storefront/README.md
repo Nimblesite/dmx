@@ -33,20 +33,24 @@ dart test
 | [inventory.dart](lib/inventory.dart) | `@dmx('diff')` `@dmx('model')` | What changed, as data, for audit trails and unsaved-changes banners. Collections compare by content, so `diff` agrees with `==`. |
 | [l10n.dart](lib/l10n.dart) | `@dmx('strings')` | A message is a method signature. `{count}` in the template must correspond to a parameter called `count`, checked at generation time rather than by a customer. |
 
-## One model, defined in Markdown
+## One model, defined by a diagram
 
-[docs/shipping.dmx.md](docs/shipping.dmx.md) has no annotated Dart behind it at
-all. The types are declared once in a typeDiagram fence, and the two Mustache
-fences under it generate [lib/shipping.dart](lib/shipping.dart) — records,
-a sealed union, and a typedef — and
+[models/shipping.td](models/shipping.td) has no annotated Dart behind it at all.
+The types are declared once. With no template beside it, the definition renders
+through the canonical model template dmx ships, producing
+[lib/shipping.dart](lib/shipping.dart) — immutable records that compare by
+value, a sealed union whose cases are values too, a typedef, and a JSON
+extension beside each class rather than inside it. The one template that *is*
+beside it, [shipping.wire.mustache](models/shipping.wire.mustache), generates
 [lib/shipping_wire.dart](lib/shipping_wire.dart), a constant wire-name table.
-Both are functions of the same definition, so a field added to the diagram
-changes both files together. The definition still renders as a diagram, so that
-one page is the model, its documentation, and the build input.
+Both files are functions of the same definition, so a field added to the
+definition changes both together. The `.td` file is pure typeDiagram, so it
+still renders as a diagram anywhere typeDiagram is supported.
+[models/README.md](models/README.md) walks through it.
 
 [test/shipping_test.dart](test/shipping_test.dart) constructs the generated
-types, switches over the union without a default arm, and checks that the two
-generated files agree.
+types, compares them by value, round-trips them through JSON, switches over the
+union without a default arm, and checks that the two generated files agree.
 
 ## Reading order
 

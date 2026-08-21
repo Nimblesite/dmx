@@ -4,7 +4,7 @@ use anyhow::{Result, bail};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use dmx::{Options, Outcome, process_path, typediagram, watch};
+use dmx::{Options, Outcome, process_path, sources, typediagram, watch};
 
 /// What `dmx` prints when it cannot tell what was asked of it.
 const USAGE: &str = "usage:\n  dmx build [PATHS...] [--insert-regions] [--check]\n  \
@@ -85,25 +85,34 @@ fn run() -> Result<ExitCode> {
 }
 
 /// Prints the generation groups, dependencies, and exact context of one
-/// Markdown document [typediagram.execution].
+/// typeDiagram source [typediagram.execution].
+///
+/// A definition file, a template beside one, or a Markdown document: three
+/// spellings of the same question, so all three answer it.
 fn explain(paths: &[PathBuf]) -> Result<ExitCode> {
     let [path] = paths else {
         bail!("[cli] `dmx explain` takes exactly one file\n{USAGE}");
     };
-    if !typediagram::is_markdown(path) {
-        bail!(
-            "[cli] `dmx explain` currently explains Markdown documents; {} is not one",
-            path.display()
-        );
-    }
-    print!("{}", typediagram::document::explain(path)?);
+    let report = match path {
+        _ if typediagram::is_markdown(path) => typediagram::document::explain(path)?,
+        _ if typediagram::is_definition(path) => typediagram::standalone::explain(path)?,
+        _ => match typediagram::definition_of(path) {
+            Some(definition) => typediagram::standalone::explain(&definition)?,
+            None => bail!(
+                "[cli] `dmx explain` explains a typeDiagram definition (`.td`), a template bound \
+                 to one, or a Markdown document; {} is none of those",
+                path.display()
+            ),
+        },
+    };
+    print!("{report}");
     Ok(ExitCode::SUCCESS)
 }
 
 /// One generation pass, reporting what it wrote and exiting non-zero under
 /// `--check` when anything was out of date [execution].
 fn build(paths: &[PathBuf], opts: Options) -> Result<ExitCode> {
-    let files = watch::collect_sources(paths)?;
+    let files = sources::collect_sources(paths)?;
     let mut updated = 0usize;
     for file in &files {
         if let Outcome::Updated = process_path(file, paths, &opts)? {

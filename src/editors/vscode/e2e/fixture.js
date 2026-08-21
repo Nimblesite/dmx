@@ -48,4 +48,32 @@ That is the whole document.
 `;
 }
 
-module.exports = { annotatedClass, document };
+// A standalone definition and the template beside it [typediagram.standalone]:
+// files, nothing embedded in anything, and no Dart source of truth. The
+// template carries no metadata at all — the convention answers both questions
+// it could ask — and it takes the canonical model template's place, which is
+// what makes this fixture about the extension's wiring rather than about what
+// dmx generates [typediagram.canonical].
+
+function definition(typeName, fieldName) {
+  return `# ${typeName}, and nothing else in this file.
+type ${typeName} {
+  ${fieldName}: String
+}
+`;
+}
+
+function template() {
+  return `{{#declarations}}
+final class {{name}} {
+  const {{name}}({{{constructorParameters}}});
+{{#fields}}
+
+  final {{{dartType}}} {{name}};
+{{/fields}}
+}
+{{/declarations}}
+`;
+}
+
+module.exports = { annotatedClass, definition, document, template };

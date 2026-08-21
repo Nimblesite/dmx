@@ -1,149 +1,55 @@
 //! One Markdown document through the whole pipeline
 //! [typediagram.execution].
 //!
-//! Bind → resolve → invoke the built-in macro → check the paths → emit. The
-//! document itself is never rewritten: it is the source of truth, and dmx only
-//! ever reads it [typediagram.output].
-//!
-//! `explain` walks the same path and stops before emission, printing what the
-//! templates will actually see. It is the template author's only tool, so it
-//! prints the exact context rather than a summary of it.
+//! This is a front end and nothing else: read the file, bind its fences, and
+//! hand the groups to [`super::run`], which is the pipeline both front ends
+//! share. The document itself is never rewritten — it is the source of truth,
+//! and dmx only ever reads it [typediagram.output].
 
-use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, Result};
-use serde_json::json;
 
-use super::{Invocation, context, emit, markdown, resolve, target};
-use crate::{Options, Outcome, macros};
-
-/// Everything one document produced, resolved onto real paths.
-struct Rendered {
-    /// Each output's absolute path and complete text.
-    outputs: Vec<(PathBuf, String)>,
-}
+use super::binding::Group;
+use super::{emit, markdown, run};
+use crate::{Options, Outcome};
 
 /// Generates every group in `path`, writing what changed
 /// [typediagram.execution].
 ///
 /// `roots` is the scope this pass was asked to manage, and therefore the scope
-/// stale outputs are collected from: an output that a removed template used to
-/// produce is found by its ownership marker among the files dmx already walks.
+/// stale outputs are collected from.
 ///
 /// # Errors
 ///
-/// Fails when the document cannot be read, when binding, resolution, rendering,
-/// validation, or path safety refuses it, or on I/O.
+/// Fails when the document cannot be read, when binding, resolution,
+/// rendering, validation, or path safety refuses it, or on I/O.
 pub fn process(path: &Path, roots: &[PathBuf], opts: &Options) -> Result<Outcome> {
-    let source = fs::read_to_string(path)
-        .with_context(|| format!("DMX1002: cannot read {}", path.display()))?;
-    let workspace = std::env::current_dir().context("DMX1002: cannot resolve the workspace")?;
-    let root = emit::output_root(&workspace, path);
-    let document = emit::document_name(&root, path);
-    let rendered = render(&document, &root, &source)?;
-    let candidates = crate::watch::collect_outputs(roots)?;
-    let changed = emit::emit(&document, &root, &rendered.outputs, &candidates, opts.check)?;
-    Ok(if changed {
-        Outcome::Updated
-    } else {
-        Outcome::Unchanged
-    })
+    let (document, root, groups) = bind(path)?;
+    run::generate(&document, &root, &groups, roots, opts)
 }
 
-/// Every output `source` declares, rendered and validated but not written.
-fn render(document: &str, root: &Path, source: &str) -> Result<Rendered> {
-    let groups = markdown::groups(source).with_context(|| format!("in {document}"))?;
-    let mut outputs = Vec::new();
-    for group in &groups {
-        let model = resolve(document, group)?;
-        let files = macros::expand_group(&Invocation {
-            document,
-            group,
-            model: &model,
-        })?;
-        // The macro renders one file per bound template, in template order, so
-        // a path fault can name the fence that declared it.
-        for (template, file) in group.templates.iter().zip(files) {
-            let located = || {
-                format!(
-                    "in {document}, the Mustache template on line {}",
-                    template.fence.line
-                )
-            };
-            emit::refuse_self_overwrite(document, &file.name).with_context(located)?;
-            let path = emit::resolve_output(root, &file.name).with_context(located)?;
-            outputs.push((path, file.text));
-        }
-    }
-    Ok(Rendered { outputs })
-}
-
-/// What `dmx explain` prints for a Markdown document
-/// [typediagram.execution].
-///
-/// Nothing is rendered and nothing is written: this is the input side of the
-/// pipeline, laid out so a template author can see the names they may place
-/// before they place them.
+/// What `dmx explain` prints for a Markdown document [typediagram.execution].
 ///
 /// # Errors
 ///
 /// Fails when the document cannot be read, or when binding or resolution
 /// refuses it — the same failures generation would report.
 pub fn explain(path: &Path) -> Result<String> {
+    let (document, root, groups) = bind(path)?;
+    run::report(&document, &root, &groups)
+}
+
+/// The document's name, the root its outputs resolve against, and its groups.
+fn bind(path: &Path) -> Result<(String, PathBuf, Vec<Group>)> {
     let source = fs::read_to_string(path)
         .with_context(|| format!("DMX1002: cannot read {}", path.display()))?;
     let workspace = std::env::current_dir().context("DMX1002: cannot resolve the workspace")?;
     let root = emit::output_root(&workspace, path);
     let document = emit::document_name(&root, path);
     let groups = markdown::groups(&source).with_context(|| format!("in {document}"))?;
-    let mut out = format!(
-        "{document}: {} generation group(s), outputs under {}\n",
-        groups.len(),
-        root.display()
-    );
-    for group in &groups {
-        let model = resolve(&document, group)?;
-        writeln!(
-            out,
-            "\ngroup {} — typeDiagram fence {} on line {}, {} declaration(s), digest {}",
-            group.ordinal,
-            group.definition.ordinal,
-            group.definition.line,
-            model.decls().len(),
-            super::digest(&group.definition.body),
-        )
-        .map_err(report_fault)?;
-        for template in &group.templates {
-            let target = target::find(&template.target)?;
-            writeln!(
-                out,
-                "  -> {} (target {}, fence {} on line {}, digest {})",
-                template.output,
-                target.name,
-                template.fence.ordinal,
-                template.fence.line,
-                super::digest(&template.fence.body),
-            )
-            .map_err(report_fault)?;
-            let ctx = context::build(&document, group, template, &model, target)?;
-            writeln!(
-                out,
-                "{}",
-                serde_json::to_string_pretty(&json!({ "context": ctx }))
-                    .context("DMX2000: internal error — the context is not serializable")?
-            )
-            .map_err(report_fault)?;
-        }
-    }
-    Ok(out)
-}
-
-/// A `String` that cannot be written to is not a condition this program can
-/// act on, and saying so is better than a panic that says less.
-fn report_fault(error: std::fmt::Error) -> anyhow::Error {
-    anyhow::anyhow!("DMX2000: internal error — cannot format the explain report: {error}")
+    Ok((document, root, groups))
 }
 
 #[cfg(test)]
@@ -153,38 +59,9 @@ mod tests {
     use super::{explain, process};
     use crate::{Options, Outcome};
 
-    /// A scratch workspace holding one document, with the process working
-    /// directory pointed at it.
-    ///
-    /// The working directory is process-wide, so these tests run under one
-    /// mutex rather than in parallel — the alternative is a `workspace` option
-    /// nothing but the tests would ever set.
+    /// The canonical worked document, in a workspace of its own.
     fn in_workspace<T>(document: &str, body: impl FnOnce(&std::path::Path) -> T) -> T {
-        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-        let guard = LOCK
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let directory = scratch();
-        fs::create_dir_all(directory.join("docs")).expect("docs directory");
-        fs::write(directory.join("docs").join("models.dmx.md"), document).expect("document");
-        let previous = std::env::current_dir().expect("cwd");
-        std::env::set_current_dir(&directory).expect("enter workspace");
-        let outcome = body(&directory);
-        std::env::set_current_dir(previous).expect("leave workspace");
-        drop(fs::remove_dir_all(&directory));
-        drop(guard);
-        outcome
-    }
-
-    /// A directory nobody else holds.
-    fn scratch() -> std::path::PathBuf {
-        let unique = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|elapsed| elapsed.as_nanos())
-            .unwrap_or_default();
-        let path = std::env::temp_dir().join(format!("dmx-td-{}-{unique}", std::process::id()));
-        fs::create_dir_all(&path).expect("scratch directory");
-        path
+        crate::typediagram::scratch::in_workspace(&[("docs/models.dmx.md", document)], body)
     }
 
     /// The canonical worked document.

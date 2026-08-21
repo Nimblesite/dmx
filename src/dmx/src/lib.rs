@@ -28,6 +28,8 @@ pub mod hygiene;
 pub mod jsoncontent;
 pub mod macros;
 pub mod render;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod sources;
 pub mod typediagram;
 pub mod types;
 #[cfg(not(target_arch = "wasm32"))]
@@ -244,9 +246,10 @@ fn process_source_inner(
 /// Runs the pipeline over one source, whatever kind it is
 /// [typediagram.execution].
 ///
-/// A Dart file is generated into; a Markdown document generates whole files
-/// from its typeDiagram groups. `roots` is the scope this pass was asked to
-/// manage, which is where a document's stale outputs are collected from.
+/// A Dart file is generated into; a Markdown document and a `.td` definition
+/// file both generate whole files from their typeDiagram groups. `roots` is
+/// the scope this pass was asked to manage, which is where stale outputs are
+/// collected from.
 ///
 /// # Errors
 ///
@@ -261,6 +264,20 @@ pub fn process_path(path: &Path, roots: &[std::path::PathBuf], opts: &Options) -
     }
     if typediagram::is_markdown(path) {
         return typediagram::document::process(path, roots, opts);
+    }
+    if typediagram::is_definition(path) {
+        return typediagram::standalone::process(path, roots, opts);
+    }
+    if typediagram::is_template(path) {
+        // A template is not a source of its own: nothing is generated *from*
+        // it, and what changed is what the definition beside it generates. A
+        // template with no definition beside it is somebody else's Mustache
+        // file — the catalogue's previews are exactly that — and dmx leaves it
+        // alone [typediagram.standalone].
+        return match typediagram::definition_of(path) {
+            Some(definition) => typediagram::standalone::process(&definition, roots, opts),
+            None => Ok(Outcome::Unchanged),
+        };
     }
     process_file(path, opts)
 }

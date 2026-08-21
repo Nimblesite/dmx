@@ -35,6 +35,86 @@
 
 use anyhow::{Result, bail};
 
+/// The suffix that names a declaration's JSON extension [typediagram.canonical].
+///
+/// `User` decodes and encodes through `UserJson`. One constant, so the name the
+/// codec table calls and the name a template declares can never drift apart.
+pub const JSON_EXTENSION: &str = "Json";
+
+/// Where a declared type keeps its decoder [model.json-codec].
+///
+/// `Address.fromJson` and `AddressJson.fromJson` decode the same value; which
+/// one exists depends on where the members were written. The inline backend
+/// generates into the class body, so the decoder is a static on the class
+/// itself [emission.inline-backend]. Whole-file generation writes the class as
+/// a pure data declaration and puts its codec on the `<Name>Json` extension
+/// beside it [typediagram.canonical], so the same call has to name the
+/// extension.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum Decoders {
+    /// `Address.fromJson` — the declaration carries its own decoder.
+    #[default]
+    OnTheType,
+    /// `AddressJson.fromJson` — the decoder lives on the type's JSON extension.
+    OnTheExtension,
+}
+
+/// How generated code reaches the dmx runtime [model.json-codec].
+///
+/// Every expression the codec table builds names something the runtime exports
+/// — `Ok`, `Err`, `DecodeError`, `dmxList` — and what those names resolve to
+/// depends on how the file that holds them imported the runtime. The inline
+/// backend generates into a file somebody else wrote, whose import it does not
+/// control, so it spells the names bare. Whole-file generation writes the
+/// import itself and prefixes it [typediagram.canonical]: a diagram is free to
+/// declare a type called `Result`, and a local declaration hides an imported
+/// name, so bare names would quietly resolve to the wrong type.
+///
+/// One value threaded through the table, so no caller ever spells a runtime
+/// name of its own.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct Runtime {
+    /// What the runtime import was bound to, trailing dot included, or `""`
+    /// when it was imported without a prefix.
+    pub prefix: &'static str,
+    /// Where a declared type keeps its decoder.
+    pub decoders: Decoders,
+}
+
+impl Runtime {
+    /// The inline backend's: an unprefixed import somebody else wrote, and a
+    /// decoder on the class [emission.inline-backend].
+    pub const IN_CLASS: Self = Self {
+        prefix: "",
+        decoders: Decoders::OnTheType,
+    };
+
+    /// Whole-file generation's: a prefixed import this generator writes, and a
+    /// decoder on the type's JSON extension [typediagram.canonical]. The
+    /// prefix is the package's own name, which is what the generated import
+    /// binds it to.
+    pub const PREFIXED: Self = Self {
+        prefix: "dmx.",
+        decoders: Decoders::OnTheExtension,
+    };
+
+    /// `name`, as generated code has to spell it to reach the runtime.
+    #[must_use]
+    pub fn name(self, name: &str) -> String {
+        format!("{}{name}", self.prefix)
+    }
+
+    /// What generated code writes to reach `name`'s decoder. The declaration
+    /// and its extension are both local, so neither takes the prefix.
+    #[must_use]
+    pub fn callee(self, name: &str) -> String {
+        match self.decoders {
+            Decoders::OnTheType => name.to_owned(),
+            Decoders::OnTheExtension => format!("{name}{JSON_EXTENSION}"),
+        }
+    }
+}
+
 /// A parsed Dart type: `Map<String, List<int>>?` and friends.
 #[derive(Debug, Clone)]
 pub struct DartType {
@@ -214,32 +294,41 @@ pub fn json_shape(ty: &DartType) -> String {
 ///
 /// Fails when the type has the wrong number of type arguments, a map key that
 /// is not a `String`, or no codec at all.
-pub fn decode_bound(ty: &DartType, value: &str, path: &str, indent: usize) -> Result<String> {
+pub fn decode_bound(
+    ty: &DartType,
+    value: &str,
+    path: &str,
+    indent: usize,
+    runtime: Runtime,
+) -> Result<String> {
     if let Some(expr) = pure_transform(ty, value) {
-        return Ok(format!("Ok({expr})"));
+        return Ok(format!("{}({expr})", runtime.name("Ok")));
     }
     Ok(match ty.name.as_str() {
         // Explicit type arguments: without them the arms' least upper bound
         // widens to `Object` and the enclosing record stops being exhaustive.
         "DateTime" | "Uri" | "BigInt" => format!(
-            "switch ({}.tryParse({value})) {{ \
-             final {0} parsed => Ok<{0}, DecodeError>(parsed), \
-             null => Err<{0}, DecodeError>(DecodeError({path}, '{0}', {value})) }}",
-            ty.name
+            "switch ({name}.tryParse({value})) {{ \
+             final {name} parsed => {ok}<{name}, {error}>(parsed), \
+             null => {err}<{name}, {error}>({error}({path}, '{name}', {value})) }}",
+            name = ty.name,
+            ok = runtime.name("Ok"),
+            err = runtime.name("Err"),
+            error = runtime.name("DecodeError"),
         ),
         "List" | "Set" | "Iterable" => {
             let [elem] = ty.args.as_slice() else {
                 bail!("DMX2102: `{}` needs exactly one type argument", ty.source);
             };
-            let combinator = if ty.name == "Set" {
+            let combinator = runtime.name(if ty.name == "Set" {
                 "dmxSet"
             } else {
                 "dmxList"
-            };
+            });
             format!(
                 "{combinator}<{}>({value}, {path}, {})",
                 elem.source,
-                decoder(elem, indent)?
+                decoder(elem, indent, runtime)?
             )
         }
         "Map" => {
@@ -250,13 +339,16 @@ pub fn decode_bound(ty: &DartType, value: &str, path: &str, indent: usize) -> Re
                 bail!("DMX2101: map key type `{}` is not String", k.source);
             }
             format!(
-                "dmxMap<{}>({value}, {path}, {})",
+                "{}<{}>({value}, {path}, {})",
+                runtime.name("dmxMap"),
                 v.source,
-                decoder(v, indent)?
+                decoder(v, indent, runtime)?
             )
         }
         // Name-level resolution: an unrecognized simple type decodes itself.
-        _ if ty.is_declared() => format!("{}.fromJson({value}, {path})", ty.name),
+        _ if ty.is_declared() => {
+            format!("{}.fromJson({value}, {path})", runtime.callee(&ty.name))
+        }
         _ => bail!("DMX2102: cannot build a codec for `{}`", ty.source),
     })
 }
@@ -275,26 +367,29 @@ pub fn decode_bound(ty: &DartType, value: &str, path: &str, indent: usize) -> Re
 /// # Errors
 ///
 /// Fails when the element type has no codec.
-pub fn decoder(ty: &DartType, indent: usize) -> Result<String> {
+pub fn decoder(ty: &DartType, indent: usize, runtime: Runtime) -> Result<String> {
     if ty.nullable {
         let inner = ty.non_null();
         return Ok(format!(
-            "(value, path) => dmxNullable<{}>(value, path, {})",
+            "(value, path) => {}<{}>(value, path, {})",
+            runtime.name("dmxNullable"),
             inner.source,
-            decoder(&inner, indent)?
+            decoder(&inner, indent, runtime)?
         ));
     }
     if ty.is_declared() {
-        return Ok(format!("{}.fromJson", ty.name));
+        return Ok(format!("{}.fromJson", runtime.callee(&ty.name)));
     }
     let pad = " ".repeat(indent);
     Ok(format!(
         "(value, path) => switch (value) {{\n\
          {pad}  final {} value => {},\n\
-         {pad}  _ => Err(DecodeError(path, '{}', value)),\n\
+         {pad}  _ => {}({}(path, '{}', value)),\n\
          {pad}}}",
         json_shape(ty),
-        decode_bound(ty, "value", "path", indent.saturating_add(2))?,
+        decode_bound(ty, "value", "path", indent.saturating_add(2), runtime)?,
+        runtime.name("Err"),
+        runtime.name("DecodeError"),
         ty.source
     ))
 }
@@ -341,108 +436,5 @@ pub fn encode(ty: &DartType, expr: &str, depth: usize) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn parse(ty: &str) -> DartType {
-        DartType::parse(ty).unwrap()
-    }
-
-    /// [model.json-codec]: decoding is total — no `throw`, no `as`, no `!`.
-    #[test]
-    fn decoding_never_throws_or_casts() {
-        for ty in [
-            "int",
-            "String",
-            "DateTime",
-            "List<int>",
-            "Set<String>",
-            "Address",
-        ] {
-            let out = decode_bound(&parse(ty), "value", "'$path.f'", 0).unwrap();
-            for forbidden in ["throw", " as ", "!"] {
-                assert!(
-                    !out.contains(forbidden),
-                    "`{forbidden}` in decode of {ty}: {out}"
-                );
-            }
-        }
-        for ty in ["String?", "List<String>?", "Map<String, int>?"] {
-            let out = decoder(&parse(ty), 0).unwrap();
-            for forbidden in ["throw", " as ", "!"] {
-                assert!(
-                    !out.contains(forbidden),
-                    "`{forbidden}` in decoder for {ty}"
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn decode_shapes() {
-        assert_eq!(
-            decode_bound(&parse("int"), "age", "'$path.age'", 0).unwrap(),
-            "Ok(age)"
-        );
-        assert_eq!(
-            decode_bound(&parse("DateTime"), "at", "'$path.at'", 0).unwrap(),
-            "switch (DateTime.tryParse(at)) { \
-             final DateTime parsed => Ok<DateTime, DecodeError>(parsed), \
-             null => Err<DateTime, DecodeError>(DecodeError('$path.at', 'DateTime', at)) }"
-        );
-        assert_eq!(
-            decode_bound(&parse("Address"), "a", "'$path.a'", 0).unwrap(),
-            "Address.fromJson(a, '$path.a')"
-        );
-        assert_eq!(
-            decode_bound(&parse("List<String>"), "tags", "'$path.tags'", 0).unwrap(),
-            "dmxList<String>(tags, '$path.tags', (value, path) => switch (value) {\n\
-             \x20 final String value => Ok(value),\n\
-             \x20 _ => Err(DecodeError(path, 'String', value)),\n\
-             })"
-        );
-        // Nested nullability composes through dmxNullable.
-        assert!(
-            decoder(&parse("List<String?>"), 0)
-                .unwrap()
-                .contains("dmxNullable<String>(value, path,")
-        );
-    }
-
-    /// A declared type is its own decoder, whatever kind of declaration it is.
-    #[test]
-    fn declared_types_decode_themselves() {
-        assert_eq!(decoder(&parse("Address"), 0).unwrap(), "Address.fromJson");
-        assert_eq!(json_shape(&parse("Address")), "Object?");
-        assert_eq!(
-            decode_bound(&parse("List<Status>"), "s", "'$path.s'", 0).unwrap(),
-            "dmxList<Status>(s, '$path.s', Status.fromJson)"
-        );
-    }
-
-    /// The JSON shape a map pattern must bind before decoding [model.json-codec].
-    #[test]
-    fn json_shapes() {
-        assert_eq!(json_shape(&parse("DateTime")), "String");
-        assert_eq!(json_shape(&parse("List<Address>")), "List<dynamic>");
-        assert_eq!(
-            json_shape(&parse("Map<String, int>")),
-            "Map<String, dynamic>"
-        );
-        assert_eq!(json_shape(&parse("double")), "num");
-        assert_eq!(json_shape(&parse("String")), "String");
-    }
-
-    #[test]
-    fn encode_expressions() {
-        let encode_of = |ty: &str, e: &str| encode(&parse(ty), e, 0);
-        assert_eq!(encode_of("List<String>", "tags"), "tags");
-        assert_eq!(encode_of("Set<int>", "ids"), "ids.toList()");
-        assert_eq!(encode_of("Address?", "home"), "home?.toJson()");
-        assert_eq!(encode_of("DateTime", "at"), "at.toIso8601String()");
-        assert_eq!(
-            encode_of("List<Address>", "stops"),
-            "stops.map((e0) => e0.toJson()).toList()"
-        );
-    }
-}
+#[path = "types_tests.rs"]
+mod tests;
