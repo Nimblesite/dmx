@@ -295,8 +295,8 @@ fn render_reply(request: &Value) -> Value {
     }
 }
 
-/// The `files` a reply carries, names validated as bare `*.dart` file names
-/// [dartmacros.files].
+/// The `files` a reply carries, with safe Dart output paths validated before
+/// they enter the shared pipeline [dartmacros.files].
 fn macro_files(reply: &Value) -> Result<Vec<GeneratedFile>> {
     let mut files = Vec::new();
     for file in reply
@@ -311,12 +311,9 @@ fn macro_files(reply: &Value) -> Result<Vec<GeneratedFile>> {
         ) else {
             bail!("DMX7002: each entry in `files` needs a string `name` and `text`");
         };
-        let stem_ok = name
-            .strip_suffix(".dart")
-            .is_some_and(|stem| !stem.is_empty() && !stem.starts_with('.'));
-        if !stem_ok || name.contains(['/', '\\']) {
+        if !valid_macro_file_path(name) {
             bail!(
-                "DMX7007: macro file name `{name}` must be a bare `*.dart` file name [dartmacros.files]"
+                "DMX7007: macro file name `{name}` must be a safe package-relative `*.dart` path [dartmacros.files]"
             );
         }
         files.push(GeneratedFile {
@@ -325,6 +322,20 @@ fn macro_files(reply: &Value) -> Result<Vec<GeneratedFile>> {
         });
     }
     Ok(files)
+}
+
+/// Whether a macro output is a relative Dart path with no hidden or escaping
+/// component [dartmacros.files].
+fn valid_macro_file_path(name: &str) -> bool {
+    if name.contains('\\') || Path::new(name).extension().and_then(|v| v.to_str()) != Some("dart") {
+        return false;
+    }
+    Path::new(name)
+        .components()
+        .all(|component| match component {
+            std::path::Component::Normal(part) => !part.to_string_lossy().starts_with('.'),
+            _ => false,
+        })
 }
 
 impl Drop for Worker {
