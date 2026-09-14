@@ -200,8 +200,9 @@ sealed class DmxOutput {
 /// One whole Dart file this expansion authors, named by the macro
 /// [dartmacros.files].
 final class DmxGeneratedFile {
-  /// A bare file name ending in `.dart` — the driver anchors it beside the
-  /// annotated declaration's own file and refuses anything path-like.
+  /// A `.dart` file name or safe package-relative path. Bare names are anchored
+  /// beside the annotated declaration; paths are anchored at its nearest
+  /// `pubspec.yaml`. Absolute paths, traversal and hidden components are refused.
   final String name;
 
   /// The file's complete Dart source. The driver prepends its ownership
@@ -220,7 +221,7 @@ final class DmxFragment extends DmxOutput {
   /// Every identifier the text binds, for hygiene [hygiene].
   final List<String> introduced;
 
-  /// Whole sibling files this expansion also authors, one per name the
+  /// Whole files this expansion also authors, one per name or package path the
   /// macro chooses [dartmacros.files].
   final List<DmxGeneratedFile> files;
 

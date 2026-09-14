@@ -40,35 +40,8 @@ pub fn resolve_output(workspace: &Path, declared: &str) -> Result<PathBuf> {
         }
     }
     let resolved = workspace.join(relative);
-    refuse_symlink_escape(workspace, &resolved).map_err(|detail| fault(&detail))?;
+    crate::emit::refuse_symlink_escape(workspace, &resolved).map_err(|detail| fault(&detail))?;
     Ok(resolved)
-}
-
-/// Refuses a path whose nearest existing ancestor resolves outside the root.
-///
-/// A directory in the middle of an output path may be a symbolic link; the
-/// question is only ever whether following it still lands inside the tree dmx
-/// was asked to manage. Canonicalizing the deepest ancestor that exists answers
-/// exactly that, and a path whose directories do not exist yet cannot have been
-/// redirected by one.
-fn refuse_symlink_escape(workspace: &Path, resolved: &Path) -> Result<(), String> {
-    let Ok(root) = workspace.canonicalize() else {
-        return Ok(());
-    };
-    let existing = resolved
-        .ancestors()
-        .skip(1)
-        .find(|ancestor| ancestor.exists())
-        .unwrap_or(workspace);
-    match existing.canonicalize() {
-        Ok(real) if real.starts_with(&root) => Ok(()),
-        Ok(real) => Err(format!(
-            "reaches outside the workspace through {} -> {}",
-            existing.display(),
-            real.display()
-        )),
-        Err(_) => Ok(()),
-    }
 }
 
 /// Refuses an output path a document may not claim at all.

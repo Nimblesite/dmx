@@ -227,15 +227,15 @@ An `expand` reply MAY carry `files` alongside `text`:
 ```json
 {"v":1,"id":"e1","text":"…","introduced":["tables"],
  "files":[{"name":"customer_row.dart","text":"…"},
-          {"name":"order_row.dart","text":"…"}]}
+          {"name":"lib/src/generated/models.dart","text":"…"}]}
 ```
 
 The annotated declaration is the **seed**: its fragment fills its region as ever, and each entry in `files` becomes a complete Dart file beside the seed's own file. Normatively:
 
-- **Naming.** `name` MUST be a bare file name ending in `.dart` — no path separator, no leading dot, a non-empty stem. Anything else is `DMX7007`. The macro controls the name; the seed's directory anchors where it lands.
-- **Ownership marker.** The driver — never the macro — prepends line 1 to every file it writes: `// dmx: generated from <seed file name> — do not edit.` The marker is the whole ownership protocol: a file that carries it is machine-owned outright, no regions, no author bytes, and byte-exactness ([emission.inline-backend.byte-exactness]) has nothing in it to protect.
+- **Naming.** `name` MUST end in `.dart` and contain only ordinary relative path components: no absolute root, `.` or `..`, backslash, or hidden component. A bare name lands beside the seed. A path-shaped name is relative to the nearest ancestor carrying `pubspec.yaml`; without that package root it is `DMX7007`. A target that escapes the package through a symbolic link is also `DMX7007`.
+- **Ownership marker.** The driver — never the macro — prepends line 1 to every file it writes. A sibling records the seed file name; a package-relative output records the seed's package-relative path: `// dmx: generated from <seed> — do not edit.` The marker is the whole ownership protocol: a file that carries it is machine-owned outright, no regions, no author bytes, and byte-exactness ([emission.inline-backend.byte-exactness]) has nothing in it to protect.
 - **Never overwrite a human.** A target path that already exists without a dmx marker is somebody's hand-written file, and the driver MUST refuse with `DMX7008` rather than touch it. The same code covers two macro files claiming one name in a single pass, and a macro naming the seed's own file.
-- **Stale collection.** After a pass over a seed **in which a macro actually expanded**, any `.dart` file in the seed's directory whose marker names **this seed** and which the pass did not produce MUST be deleted. A dropped table means a dropped file — the generated tree tracks the source of truth in both directions.
+- **Stale collection.** After a pass over a seed **in which a macro actually expanded**, any sibling whose marker names the seed file, and any Dart file inside its package whose marker names the package-relative seed, which the pass did not produce MUST be deleted. A dropped table means a dropped file — the generated tree tracks the source of truth in both directions.
 - **Nothing ran, nothing is collected.** A pass where no macro expanded MUST NOT write or collect any file, even when the source carries an annotation. An absent worker, an uninstalled `dart`, a crashed process and a checkout without `tool/` all expand nothing, and reading that as "the source of truth dropped everything" would delete a generated tree over a broken toolchain. Deletion requires a macro that ran and did not produce the file.
 - **Editable in the ordinary sense.** A macro-authored file is still generated code someone will edit, delete, or revert, and its marker names the seed that produces it. Under `watch` ([execution.modes]), a change to a file carrying the marker MUST re-run the seed the marker names, and a marked file that is deleted MUST be written again. Re-running the seed is the only answer available: the authored file carries no annotation of its own, so a pass over it alone can only ever report "unchanged".
 - **Same bar.** Each file's text passes through the one normalizer and MUST parse; an unparseable file fails the build and nothing is written ([dartmacros.pipeline], [validation]). Writes are atomic and no-op-aware ([emission.inline-backend.no-op-writes]), so `watch` does not loop on its own output.
@@ -243,4 +243,3 @@ The annotated declaration is the **seed**: its fragment fills its region as ever
 - **Inert as input.** A macro-authored file carries no `@dmx`, so later passes leave it untouched; generated output is never re-scanned for triggers ([rendering]).
 
 ---
-

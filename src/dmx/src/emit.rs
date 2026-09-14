@@ -20,11 +20,18 @@ use std::path::{Path, PathBuf};
 
 use crate::frontend::{REGION_END, REGION_START, RawDecl, is_region_end, region_opener};
 
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "emit/macro_files.rs"]
+mod macro_files;
+#[cfg(not(target_arch = "wasm32"))]
+pub use macro_files::emit_macro_files;
+
 /// One whole file a macro authored and named [dartmacros.files].
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GeneratedFile {
-    /// Where it goes: a bare sibling file name for a macro authored in Dart,
-    /// validated on receipt from the worker [dartmacros.files]; a
+    /// Where it goes: a sibling name or package-relative path for a macro
+    /// authored in Dart, validated on receipt from the worker
+    /// [dartmacros.files]; a
     /// workspace-relative path for a Markdown generation group, validated by
     /// its emitter [typediagram.output].
     pub name: String,
@@ -214,57 +221,105 @@ pub fn seed_of(path: &Path) -> Option<PathBuf> {
         .trim_end_matches('\n')
         .strip_prefix(FILE_MARKER_PREFIX)?
         .strip_suffix(FILE_MARKER_SUFFIX)?;
-    // Beside the generated file for a Dart macro's sibling [dartmacros.files];
-    // against the working directory for a Markdown document, whose marker
-    // names a workspace-relative path [typediagram.output].
+    // A legacy sibling marker, a package-relative macro marker, or a
+    // workspace-relative Markdown marker can all identify the seed.
     let beside = path.parent().unwrap_or_else(|| Path::new(".")).join(name);
     let from_workspace = PathBuf::from(name);
-    [beside, from_workspace]
-        .into_iter()
+    let from_package = package_root(path).map(|root| root.join(name));
+    std::iter::once(beside)
+        .chain(from_package)
+        .chain(std::iter::once(from_workspace))
         .find(|candidate| candidate.is_file())
 }
 
-/// Emits every macro-authored file beside `seed`, and collects the ones a
-/// previous pass wrote from this seed that this pass no longer produces
-/// [dartmacros.files]. Returns whether anything changed (or, under `check`,
-/// would change).
-///
-/// # Errors
-///
-/// Fails when a target exists without a dmx marker (`DMX7008` — that is a
-/// human's file), when a name collides with the seed's own, or on I/O.
+/// The directory beside an annotated seed.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn emit_macro_files(seed: &Path, files: &[GeneratedFile], opts: &Options) -> Result<bool> {
-    let dir = match seed.parent() {
-        Some(parent) if !parent.as_os_str().is_empty() => parent,
-        _ => Path::new("."),
-    };
-    let seed_name = seed
-        .file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    let marker = file_marker(&seed_name);
-    let mut changed = false;
-    for file in files {
-        if file.name == seed_name {
-            bail!(
-                "DMX7008: macro file `{}` would overwrite the annotated file itself \
-                 [dartmacros.files]",
-                file.name
-            );
+fn seed_dir(seed: &Path) -> &Path {
+    seed.parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or(Path::new("."))
+}
+
+/// The original bare-name ownership marker for sibling outputs.
+#[cfg(not(target_arch = "wasm32"))]
+fn sibling_marker(seed: &Path) -> String {
+    file_marker(&seed.file_name().unwrap_or_default().to_string_lossy())
+}
+
+/// The nearest enclosing directory containing a pubspec.
+#[cfg(not(target_arch = "wasm32"))]
+fn package_root(path: &Path) -> Option<PathBuf> {
+    path.ancestors()
+        .skip(1)
+        .find(|dir| dir.join("pubspec.yaml").is_file())
+        .map(|dir| {
+            if dir.as_os_str().is_empty() {
+                PathBuf::from(".")
+            } else {
+                dir.to_owned()
+            }
+        })
+}
+
+/// A stable forward-slash path relative to the package root.
+#[cfg(not(target_arch = "wasm32"))]
+fn relative_name(root: &Path, path: &Path) -> String {
+    let root = resolved(root);
+    let path = resolved(path);
+    path.strip_prefix(root)
+        .unwrap_or(&path)
+        .to_string_lossy()
+        .replace('\\', "/")
+}
+
+/// All Dart files under a package without following symlinks.
+#[cfg(not(target_arch = "wasm32"))]
+fn dart_files_under(root: &Path) -> Result<Vec<PathBuf>> {
+    let mut found = Vec::new();
+    collect_dart_files(root, &mut found)?;
+    Ok(found)
+}
+
+/// Recurses through visible package directories to find owned output candidates.
+#[cfg(not(target_arch = "wasm32"))]
+fn collect_dart_files(dir: &Path, found: &mut Vec<PathBuf>) -> Result<()> {
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let kind = entry.file_type()?;
+        if kind.is_dir() {
+            collect_dart_files(&entry.path(), found)?;
+        } else if kind.is_file()
+            && entry
+                .path()
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("dart"))
+        {
+            found.push(entry.path());
         }
-        let target = dir.join(&file.name);
-        let content = format!("{marker}\n\n{}\n", file.text);
-        changed |= write_owned(
-            &target,
-            &content,
-            opts.check,
-            "DMX7008",
-            "[dartmacros.files]",
-        )?;
     }
-    let kept: Vec<PathBuf> = files.iter().map(|file| dir.join(&file.name)).collect();
-    Ok(collect_stale(&dart_files_in(dir)?, &marker, &kept, opts.check)? || changed)
+    Ok(())
+}
+
+/// Refuses a path whose nearest existing ancestor resolves outside its root.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn refuse_symlink_escape(root: &Path, target: &Path) -> Result<(), String> {
+    let Ok(root) = root.canonicalize() else {
+        return Ok(());
+    };
+    let existing = target
+        .ancestors()
+        .skip(1)
+        .find(|path| path.exists())
+        .unwrap_or(&root);
+    match existing.canonicalize() {
+        Ok(real) if real.starts_with(&root) => Ok(()),
+        Ok(real) => Err(format!(
+            "reaches outside the output root through {} -> {}",
+            existing.display(),
+            real.display()
+        )),
+        Err(_) => Ok(()),
+    }
 }
 
 /// Writes one file dmx owns, and says whether that changed anything.
